@@ -1,0 +1,60 @@
+# User-specific files
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Dd]ist/
+[Dd]eploy/
+[Dd]ebugBuild/
+[Dd]ebug-x64/
+[Dd]ebug-x86/
+bin/
+obj/
+
+# User-specific settings for Visual Studio for Mac
+.vscode/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Windows Installer files
+Thumbs.db
+Desktop.ini
+
+# JetBrains Rider/IntelliJ IDEA
+.idea/
+
+# MacOS
+.DS_Store
+
+# Sensitive files 
+secrets.json
+
+# ASP.NET Core Secrets
+appsettings.Development.json
+appsettings.json
+
+# Node.js / npm
+node_modules/
+
+# Npm logs
+npm-debug.log
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Build directories
+build/

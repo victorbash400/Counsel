@@ -1,0 +1,193 @@
+Okay, let's break down the "Counsel" application into a modular architecture with mini-agents and an orchestrator. This spec sheet outlines how the different components would interact and be built.
+
+**Counsel: AI Legal Assistant - Modular Architecture Specification**
+
+**1. Core Principles**
+
+*   **Modularity:** Functionality is broken down into distinct, replaceable components (Agents/Services) with clear responsibilities.
+*   **Orchestration:** A central component (Main Orchestrator) manages the overall workflow, state, and communication between agents.
+*   **State Management:** Explicit management of user, case, and workflow context (`WorkflowContext`) is crucial for memory and relevance.
+*   **Clear Interfaces:** Communication between components happens via well-defined APIs (RESTful HTTP, function calls, or message queues).
+*   **Asynchronous Operations:** Long-running tasks (AI processing, document indexing) are handled asynchronously to keep the UI responsive.
+*   **Leverage Azure:** Utilize Azure services for hosting, AI, databases, storage, messaging, and real-time communication.
+
+**2. High-Level Architecture Diagram (Conceptual)**
+
+```
++-----------------------+      HTTP/SignalR      +--------------------------+
+|  Frontend (.NET MAUI/| <--------------------> |   Backend API Gateway    |
+|  WPF/WinUI)           |                      |  (Azure API Management?) |
++-----------------------+                      +-------------+------------+
+                                                             | HTTP
+                                                             V
++------------------------------------------------------------+-------------+
+|                           Backend Service (Azure App Service / AKS)      |
+|                                                                          |
+|  +--------------------------+        +--------------------------------+  |
+|  |   Main Orchestrator      |------->| Workflow Context Manager (Mem) |  |
+|  +-------+------------------+        +--------------------------------+  |
+|          |                                                               |
+|          | (Direct Call / Internal API / Queue Message)                  |
+|          |                                                               |
+|  +-------V-----------------------------------------------------------+   |
+|  |                           Agent Pool                              |   |
+|  | +-----------------+ +-----------------+ +-----------------------+ |   |
+|  | | Intent Parser Ag| | Research Agent  | | Document Proc. Agent* | |   |
+|  | +-----------------+ +-------+---------+ +----------+------------+ |   |
+|  | +-----------------+ +-------+---------+ +----------+------------+ |   |
+|  | | Scheduling Agent| | Drafting Agent  | | Case Management Agent | |   |
+|  | +-----------------+ +-----------------+ +-----------------------+ |   |
+|  | +-----------------+ +-----------------+ +-----------------------+ |   |
+|  | | Transcribe Agent| | Notification Ag*| |       [More...]       | |   |
+|  | +-----------------+ +-----------------+ +-----------------------+ |   |
+|  +-----------------------------+-------------------------------------+   |
+|                                |                                         |
+|  +-----------------------------V-------------------------------------+   |
+|  |                   Supporting Layers                             |   |
+|  | +--------------------------+ +--------------------------------+ |   |
+|  | | Data Access Layer (DAL)  | | External Service Connectors    | |   |
+|  | +---------+----------------+ +-------------+------------------+ |   |
+|  +-----------|------------------------------|----------------------+   |
+|              |                              |                          |
++--------------|------------------------------|--------------------------+
+               |                              |
+               V                              V
++--------------+-------------+   +------------+-----------+   +----------------+
+| Azure SQL, Blob, AI Search |   | Azure OpenAI, Speech   |   | 3rd Party APIs |
++----------------------------+   +------------------------+   +----------------+
+
+* Agents marked with '*' often run asynchronously (e.g., via Azure Functions / Background Workers).
+```
+
+**3. Component Breakdown & Specifications**
+
+**3.1. Frontend Application**
+
+*   **Responsibility:** User interaction, UI rendering, local state (current view), initiating requests, receiving real-time updates.
+*   **Technology:** .NET (WPF, WinUI 3, or MAUI). MVVM pattern.
+*   **Inputs:** User clicks, text input, voice commands, real-time messages (SignalR).
+*   **Outputs:** Visual UI, HTTP requests to Backend API Gateway, audio stream (for STT).
+*   **Communication:** HTTP REST to Backend API Gateway, WebSocket (SignalR) for real-time updates, direct calls to Azure Speech SDK (for client-side STT).
+
+**3.2. Backend API Gateway (Optional but Recommended)**
+
+*   **Responsibility:** Single entry point for frontend requests, authentication, rate limiting, request routing to the Main Orchestrator.
+*   **Technology:** Azure API Management, or integrated gateway in ASP.NET Core / FastAPI.
+*   **Inputs:** HTTP Requests from Frontend.
+*   **Outputs:** HTTP Requests to Main Orchestrator.
+*   **Communication:** HTTP.
+
+**3.3. Main Orchestrator**
+
+*   **Responsibility:** Central control flow. Receives processed requests, manages `WorkflowContext`, determines required actions, selects and invokes appropriate Agent(s), aggregates results, formats responses, handles intent confirmation logic, manages errors.
+*   **Technology:** Python (FastAPI) or C# (ASP.NET Core) hosted on Azure App Service/AKS.
+*   **Inputs:** Processed HTTP Request (from Gateway or direct), results from Agents, data from Workflow Context Manager.
+*   **Outputs:** Formatted response payload (for Frontend via Gateway), requests/commands to Agents (direct call, internal API, or queue message), updates to Workflow Context Manager.
+*   **Communication:** Receives HTTP. Communicates with Agents (see Sec 4), Workflow Context Manager (direct calls/cache interface), DAL (direct calls).
+*   **Build:** Implement as a core class/service within the main backend application. Define clear workflow logic (state machines or rule-based routing can work). Maintain references to agent interfaces/clients.
+
+**3.4. Workflow Context Manager ("Memory")**
+
+*   **Responsibility:** Loading, saving, and providing access to the `WorkflowContext` (current user, case, mode, focus, recent history, etc.). Handles both short-term (session) and long-term (persistent) context.
+*   **Technology:** Can be a dedicated service or a component within the Orchestrator. Uses Azure Cache for Redis (short-term) and Azure SQL (persistent).
+*   **Inputs:** Request context (User ID, Case ID), updates from Orchestrator.
+*   **Outputs:** `WorkflowContext` object.
+*   **Communication:** Direct function calls from Orchestrator, interacts with Redis and DAL.
+*   **Build:** Create data models for the context. Implement load/save methods interacting with cache and DB via DAL.
+
+**3.5. Agent Pool (Mini-Agents / Services)**
+
+*   **General Structure:** Each agent focuses on a specific domain. They receive necessary context and parameters from the Orchestrator and return structured results. Can be implemented as classes/modules within the main backend service, or potentially as separate microservices or Azure Functions for scalability/decoupling (especially async ones).
+
+*   **Agent: Intent Parser**
+    *   **Responsibility:** Analyzes user input text (and potentially `WorkflowContext`) to identify primary intent, extract entities/parameters, and determine confidence score.
+    *   **Technology:** Python/C#. Uses LLM (Azure OpenAI) calls, potentially fine-tuned models or NLP libraries (like spaCy).
+    *   **Inputs:** User text, `WorkflowContext`.
+    *   **Outputs:** Structured intent object (e.g., `{intent: "summarize", entity: "document:D456", confidence: 0.9}`).
+    *   **Communication:** Called by Orchestrator (likely direct function call).
+
+*   **Agent: Research**
+    *   **Responsibility:** Executes searches (semantic vector, keyword) across internal documents (Azure AI Search) and potentially external legal databases (via Connectors). Summarizes findings, performs RAG for Q&A.
+    *   **Technology:** Python/C#. Interacts with Azure AI Search SDK, External Service Connectors, LLM for summarization/RAG.
+    *   **Inputs:** Search query, filters (case ID, doc type), `WorkflowContext`, document chunks (for RAG).
+    *   **Outputs:** Search results, summaries, generated answers.
+    *   **Communication:** Called by Orchestrator. Interacts with DAL (AI Search) and External Connectors.
+
+*   **Agent: Document Processing (Async)**
+    *   **Responsibility:** Handles background processing of uploaded documents: OCR (if needed), text chunking, vector embedding generation (via Azure OpenAI), indexing into Azure AI Search, updating document status in Azure SQL.
+    *   **Technology:** Python/C#. Azure Function (triggered by Blob Storage event) or Background Worker Service. Uses Azure Vision SDK (OCR), Azure OpenAI SDK (Embeddings), Azure AI Search SDK, DAL.
+    *   **Inputs:** Blob path/stream of the uploaded document.
+    *   **Outputs:** Indexed data in Azure AI Search, status update in Azure SQL. Optionally sends notification upon completion via Notification Agent.
+    *   **Communication:** Triggered by Blob Storage event. Interacts with Azure services and DAL. May enqueue message for Notification Agent.
+
+*   **Agent: Scheduling & Reminders**
+    *   **Responsibility:** Parses natural language date/time from user requests (using LLM or library), creates/manages tasks and reminders in the database, triggers notifications when due.
+    *   **Technology:** Python/C#. Uses LLM or date/time parsing library, interacts with DAL. An associated Azure Function (time-triggered) checks for due reminders.
+    *   **Inputs:** User request text (e.g., "remind me..."), `WorkflowContext`.
+    *   **Outputs:** Creates/updates DB entries. Triggers Notification Agent.
+    *   **Communication:** Called by Orchestrator. Interacts with DAL. Time-triggered function enqueues messages for Notification Agent.
+
+*   **Agent: Drafting**
+    *   **Responsibility:** Generates text based on templates, context, and user instructions (e.g., draft email, motion section, summary).
+    *   **Technology:** Python/C#. Heavy use of LLM (Azure OpenAI) with specific prompt engineering.
+    *   **Inputs:** Drafting request, relevant `WorkflowContext`, document content/templates.
+    *   **Outputs:** Generated text draft.
+    *   **Communication:** Called by Orchestrator.
+
+*   **Agent: Case Management**
+    *   **Responsibility:** Handles CRUD (Create, Read, Update, Delete) operations for Cases, Documents (metadata), Tasks, Notes within Azure SQL.
+    *   **Technology:** Python/C#. Interacts directly with the DAL.
+    *   **Inputs:** Data payloads for case/document/task operations.
+    *   **Outputs:** Success/failure status, requested data.
+    *   **Communication:** Called by Orchestrator.
+
+*   **Agent: Transcription (Real-time aspects)**
+    *   **Responsibility:** Interfaces with real-time speech recognition results (potentially streamed from client or processed server-side). May perform basic keyword spotting or chunking. Pushes results out.
+    *   **Technology:** Python/C#. Uses Azure Speech SDK. Interfaces with SignalR Hub.
+    *   **Inputs:** Audio stream or recognized text segments.
+    *   **Outputs:** Processed/formatted transcript segments.
+    *   **Communication:** Receives data from STT process. Pushes results via Notification Agent/SignalR Hub.
+
+*   **Agent: Notification (Async/Real-time)**
+    *   **Responsibility:** Manages pushing asynchronous updates and notifications (reminders, task completions, new transcript segments) to the correct frontend clients.
+    *   **Technology:** Python/C#. Integrates with Azure SignalR Service. Could be an Azure Function triggered by queues or a component within the main service hosting the SignalR Hub.
+    *   **Inputs:** Notification payload (message, target user/session).
+    *   **Outputs:** Messages pushed via SignalR.
+    *   **Communication:** Receives messages (e.g., from queues populated by other agents) or direct calls. Interacts with SignalR service.
+
+**3.6. Supporting Layers**
+
+*   **Data Access Layer (DAL):**
+    *   **Responsibility:** Abstracts database interactions. Provides methods for querying and modifying data in Azure SQL, Blob Storage, Azure AI Search, Redis Cache. Handles connection management.
+    *   **Technology:** Python (e.g., SQLAlchemy, Azure SDKs) or C# (Entity Framework Core, Azure SDKs).
+    *   **Communication:** Called by Orchestrator and Agents.
+
+*   **External Service Connectors:**
+    *   **Responsibility:** Manages interactions with third-party services (Azure AI Services, Legal Databases APIs, Calendar APIs). Handles authentication, API keys, SDK usage, error mapping.
+    *   **Technology:** Python/C#. Uses specific SDKs or HTTP clients.
+    *   **Communication:** Called by relevant Agents (Research, Drafting, Scheduling, etc.).
+
+**4. Communication Flow Example (Summarize Document)**
+
+1.  **Frontend:** User clicks "Summarize Document X". Sends HTTP request `/cases/{caseId}/documents/{docId}/summarize` to API Gateway.
+2.  **API Gateway:** Authenticates, routes request to Main Orchestrator.
+3.  **Main Orchestrator:** Receives request. Calls `WorkflowContextManager` to load context for user/case. Determines intent is "summarize".
+4.  **Main Orchestrator:** Calls `CaseManagement Agent` (via DAL) to get metadata/location of Document X.
+5.  **Main Orchestrator:** Calls `Research Agent`, passing document content/chunks (retrieved via DAL from Blob/AI Search) and context.
+6.  **Research Agent:** Calls `External Service Connectors` to interact with Azure OpenAI (LLM) for summarization.
+7.  **LLM:** Returns summary.
+8.  **Research Agent:** Returns summary to Orchestrator.
+9.  **Main Orchestrator:** Formats the summary into a response payload. Updates `WorkflowContext` (e.g., adds to recent actions).
+10. **Main Orchestrator:** Returns HTTP response via API Gateway to Frontend.
+11. **Frontend:** Renders the summary in the UI.
+
+**5. Build & Deployment**
+
+*   **Repositories:** Likely separate repositories for Frontend and Backend, or a monorepo.
+*   **Backend Build:**
+    *   If monolithic: Build a single service containing Orchestrator, Agents (as classes/modules), DAL, Connectors.
+    *   If microservices: Build separate services for key agents (especially async ones like Document Processing) and deploy independently. Use Docker containers.
+*   **Deployment:** Azure App Service, Azure Kubernetes Service (AKS) for backend components. Azure Functions for async/triggered agents. Deploy frontend as a packaged desktop application.
+*   **CI/CD:** Azure DevOps Pipelines or GitHub Actions to automate build, test, and deployment.
+
+This detailed breakdown provides a blueprint for building Counsel in a modular, scalable, and maintainable way, leveraging distinct agents coordinated by a central orchestrator and powered by Azure services.
