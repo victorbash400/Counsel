@@ -437,5 +437,5 @@ MIT License - see the LICENSE file for details.
 <div align="center">
   <img src="https://github.com/user-attachments/assets/0a42fb42-4c80-4948-bb21-e01dc99ddd16" width="30" align="center" alt="Counsel Logo">
   <br>
-  <em>Built with 💡 for the Microsoft AI Agents Hackathon 2025</em>
+  <em>Built with 🍵 for the Microsoft AI Agents Hackathon 2025</em>
 </div>
