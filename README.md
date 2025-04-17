@@ -1,118 +1,193 @@
-# Counsel: AI-Powered Legal Assistant
+# <div align="center"><img src="https://github.com/user-attachments/assets/0a42fb42-4c80-4948-bb21-e01dc99ddd16" width="50" align="center" alt="Counsel Logo"> **Counsel**</div>
 
-![Counsel Logo](https://via.placeholder.com/800x150?text=Counsel:+AI-Powered+Legal+Assistant)
+<div align="center">
 
-## 📖 Table of Contents
-- [Project Overview](#project-overview)
-- [Key Features](#key-features)
-- [Architecture](#architecture)
-  - [Backend Architecture](#backend-architecture)
-  - [Frontend Architecture](#frontend-architecture)
-  - [Communication Flow](#communication-flow)
-- [Project Structure](#project-structure)
-- [Core Components](#core-components)
-  - [Semantic Kernel Integration](#semantic-kernel-integration)
-  - [Plugin System](#plugin-system)
-  - [Orchestration Service](#orchestration-service)
-  - [Azure Services Integration](#azure-services-integration)
-  - [Natural Language Calendar Generation](#natural-language-calendar-generation)
-- [Operating Modes](#operating-modes)
-  - [Chat Only](#chat-only)
-  - [Deep Research](#deep-research)
-  - [Paralegal](#paralegal)
-  - [Cross-Examine](#cross-examine)
-- [Installation & Setup](#installation--setup)
-- [Usage Examples](#usage-examples)
-- [Technologies Used](#technologies-used)
-- [Future Enhancements](#future-enhancements)
-- [Contributing](#contributing)
-- [License](#license)
+## AI-Powered Legal Assistant for the Modern Attorney
 
-## Project Overview
+[![Made with Azure OpenAI](https://img.shields.io/badge/Powered_by-Azure_OpenAI-0078D4?style=for-the-badge&logo=microsoft-azure&logoColor=white)](https://azure.microsoft.com)
+[![C#](https://img.shields.io/badge/C%23-8.0-512BD4?style=for-the-badge&logo=c-sharp&logoColor=white)](https://docs.microsoft.com/en-us/dotnet/csharp/)
+[![Semantic Kernel](https://img.shields.io/badge/AI_Framework-Semantic_Kernel-6118A0?style=for-the-badge)](https://github.com/microsoft/semantic-kernel)
+[![WPF](https://img.shields.io/badge/Frontend-WPF-3C8DBC?style=for-the-badge)](https://github.com/dotnet/wpf)
+[![Version](https://img.shields.io/badge/Version-v1.0.0-E84D3D?style=for-the-badge&logoColor=white)](https://github.com/your-repo/counsel)
 
-Counsel is an intelligent legal assistant designed to revolutionize how legal professionals interact with their documents, research, and case management. Built for the Microsoft AI Agents Hackathon, Counsel leverages the power of Semantic Kernel, Azure OpenAI, and Azure Cognitive Search to deliver an intuitive, mode-based interface that adapts to different legal workflows.
+**Microsoft AI Agents Hackathon 2025 Entry**
+</div>
 
-The application provides specialized tooling for document analysis, legal research, evidence examination, and collaborative paralegal tasks—all accessible through a clean WPF interface that features a dual-pane layout for conversations and detailed results.
+---
 
-## Key Features
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/a316da0d-9f4a-4756-b53f-7554fb9e17c2" width="90%" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" alt="Counsel Application Screenshot">
+  <p><em>Transform your legal practice with intelligent document analysis, deep research, and AI-powered assistance</em></p>
+</div>
 
-- **Multi-modal Interaction**: Switch seamlessly between different operational modes (Chat, Research, Paralegal, Cross-Examine) to handle diverse legal tasks.
-- **Intelligent Document Processing**: Analyze, summarize, and extract key information from legal documents.
-- **RAG-Enhanced Responses**: Retrieve and integrate relevant knowledge from document repositories to enhance AI responses.
-- **Natural Language Calendar Generation**: Create calendar events (.ics files) from natural language descriptions.
-- **Interactive UI**: Intuitive WPF application with animated sidebars, message history, and specialized canvas for detailed content.
-- **Adaptive Plugin Architecture**: Domain-specific plugins extend functionality for research, examination, and paralegal tasks.
-- **Context-Aware Conversations**: Maintains chat history to provide coherent, contextually relevant responses.
-- **Dual-Pane Layout**: Separation between conversational interface and detailed content display.
+## 🚀 Project Overview
 
-## Architecture
+**Counsel** is a sophisticated AI assistant designed specifically for legal professionals. By leveraging the power of Azure OpenAI and Semantic Kernel, Counsel transforms the way attorneys interact with legal documents, conduct research, and prepare for cases. With intuitive modes for document analysis, cross-examination preparation, and paralegal assistance, Counsel becomes an indispensable tool in your legal arsenal.
 
-### Backend Architecture
+## ✨ Key Features
 
-The Counsel backend is built on ASP.NET Core (.NET 8) with a service-oriented architecture that leverages dependency injection to coordinate diverse components:
+| Feature | Description |
+|---------|-------------|
+| 🔄 **Mode-Based Interaction** | Seamlessly switch between Chat, Deep Research, Paralegal, and Cross-Examine modes for tailored legal workflows |
+| 📝 **Intelligent Document Processing** | Analyze, summarize, and extract key entities (e.g., dates, amounts) from legal documents |
+| 🔍 **RAG-Enhanced Responses** | Leverage Retrieval-Augmented Generation with Azure Cognitive Search for contextually relevant answers |
+| 📅 **Natural Language Calendar Generation** | Create .ics calendar files from natural language event descriptions |
+| 💻 **Interactive WPF UI** | Features animated sidebars, dynamic message bubbles, and a canvas for detailed outputs |
+| 🧩 **Modular Plugin System** | Extensible plugins for research, examination, and paralegal tasks |
+| 🧠 **Context-Aware Conversations** | Maintains session history for coherent, relevant responses |
+| 🖥️ **Dual-Pane Layout** | Separates conversational chat from detailed canvas content for clarity |
 
-![Backend Architecture](https://via.placeholder.com/800x400?text=Backend+Architecture+Diagram)
+## 🏗️ Architecture
 
-1. **Core Services Layer**:
-   - Document processing for parsing and analyzing legal texts
-   - Date resolution for temporal analysis
-   - Calendar generation using Ical.Net
+### System Architecture
 
-2. **AI Integration Layer**:
-   - Azure OpenAI client for chat completions
-   - Text embedding generation for semantic search
-   - Semantic Kernel for orchestrating AI capabilities
+Counsel's architecture is a robust integration of frontend, backend, and Azure services, orchestrated by Semantic Kernel for intelligent task routing.
 
-3. **Plugin Layer**:
-   - Specialized plugins for legal research, document examination, and paralegal tasks
-   - Each plugin encapsulates domain-specific logic and interactions
+```mermaid
+%%{init: {'theme': 'forest', 'themeVariables': { 'primaryColor': '#3D85C6', 'edgeLabelBackground':'#FFFFFF', 'tertiaryColor': '#F5F5F5'}}}%%
+graph TD
+    A[User] -->|Interacts| B[WPF Frontend]
+    B -->|HTTP Requests| C[ASP.NET Core Backend]
+    C -->|Orchestrates| D[SKOrchestratorService]
+    D -->|Routes to| E[Plugins]
+    E --> F[ParalegalPlugin]
+    E --> G[ResearchPlugin]
+    E --> H[ExaminePlugin]
+    D -->|Accesses| I[Azure Services]
+    I --> J[Azure OpenAI]
+    I --> K[Azure Cognitive Search]
+    I --> L[Application Insights]
+    F -->|Processes| M[Document Chunks]
+    G -->|Searches| N[Web & Legal DB]
+    H -->|Analyzes| O[Evidence Docs]
+    B -->|Displays| P[Chat Panel]
+    B -->|Displays| Q[Canvas Panel]
+    
+    classDef azure fill:#0078D4,stroke:#006CBE,color:white;
+    classDef frontend fill:#3C8DBC,stroke:#367DA3,color:white;
+    classDef backend fill:#6118A0,stroke:#520E88,color:white;
+    classDef plugins fill:#00A36C,stroke:#008F5D,color:white;
+    
+    class J,K,L azure;
+    class B,P,Q frontend;
+    class C,D backend;
+    class F,G,H,E plugins;
+```
 
-4. **Orchestration Layer**:
-   - SKOrchestratorService for coordinating plugins, services, and modes
-   - Manages query routing, fallback strategies, and response generation
+### DeepResearch Mode Workflow
 
-5. **API Layer**:
-   - RESTful endpoints for frontend communication
-   - Middleware for error handling, security, and search index management
+DeepResearch mode combines RAG with web search to deliver comprehensive legal research briefs.
 
-### Frontend Architecture
+```mermaid
+%%{init: {'theme': 'forest', 'themeVariables': { 'primaryColor': '#6118A0', 'secondaryColor': '#E84D3D', 'tertiaryColor': '#F5F5F5'}}}%%
+graph TD
+    A[User Query] -->|Input| B[WPF Frontend]
+    B -->|Sends to| C[QueryController]
+    C -->|Routes| D[SKOrchestratorService]
+    D -->|Calls| E[ResearchPlugin]
+    E -->|Generates Embeddings| F[Azure OpenAI]
+    E -->|Vector Search| G[Azure Cognitive Search]
+    E -->|Web Search| H[HTTP Client]
+    G -->|Retrieves| I[Relevant Docs]
+    H -->|Fetches| J[Web Results]
+    E -->|Synthesizes| K[Research Brief]
+    K -->|Formats| L[Canvas Content]
+    D -->|Generates| M[Conversational Summary]
+    B -->|Displays| N[Chat Panel]
+    B -->|Displays| O[Canvas Panel]
+    
+    classDef azure fill:#0078D4,stroke:#006CBE,color:white;
+    classDef frontend fill:#3C8DBC,stroke:#367DA3,color:white;
+    classDef backend fill:#6118A0,stroke:#520E88,color:white;
+    classDef output fill:#E84D3D,stroke:#D23B2F,color:white;
+    
+    class F,G azure;
+    class B,N,O frontend;
+    class C,D backend;
+    class K,L,M output;
+```
 
-The frontend is a WPF application with a clean separation of UI and logic:
+- **RAG Process:** The ResearchPlugin generates embeddings for the query using Azure OpenAI, performs vector search via Azure Cognitive Search to retrieve relevant documents, and integrates them into the response.
+- **Web Search:** The plugin uses an HTTP client to fetch external legal resources, enhancing the research with up-to-date information.
+- **Output:** A structured research brief is displayed in the canvas, with a conversational summary in the chat panel.
 
-![Frontend Architecture](https://via.placeholder.com/800x400?text=Frontend+Architecture+Diagram)
+### CrossExamine Mode Workflow
 
-1. **UI Components**:
-   - Conversation panel for displaying message bubbles
-   - Right sidebar (canvas) for detailed content
-   - Left sidebar for navigation and case management
-   - Mode selection buttons for switching between operational contexts
+CrossExamine mode builds legal arguments by analyzing documents for inconsistencies and key passages.
 
-2. **Input Handling**:
-   - Text input with dynamic placeholder
-   - File upload and document management
-   - Mode switching and UI state management
+```mermaid
+%%{init: {'theme': 'forest', 'themeVariables': { 'primaryColor': '#00A36C', 'secondaryColor': '#3C8DBC', 'tertiaryColor': '#F5F5F5'}}}%%
+graph TD
+    A[User Query] -->|Input| B[WPF Frontend]
+    B -->|Sends to| C[QueryController]
+    C -->|Routes| D[SKOrchestratorService]
+    D -->|Calls| E[ExaminePlugin]
+    E -->|Generates Embeddings| F[Azure OpenAI]
+    E -->|Vector Search| G[Azure Cognitive Search]
+    G -->|Retrieves| H[Relevant Docs]
+    E -->|Analyzes| I[Inconsistencies]
+    E -->|Identifies| J[Key Passages]
+    E -->|Constructs| K[Argument Insights]
+    K -->|Formats| L[Canvas Content]
+    D -->|Generates| M[Conversational Summary]
+    B -->|Displays| N[Chat Panel]
+    B -->|Displays| O[Canvas Panel]
+    
+    classDef azure fill:#0078D4,stroke:#006CBE,color:white;
+    classDef frontend fill:#3C8DBC,stroke:#367DA3,color:white;
+    classDef backend fill:#6118A0,stroke:#520E88,color:white;
+    classDef output fill:#E84D3D,stroke:#D23B2F,color:white;
+    classDef analysis fill:#00A36C,stroke:#008F5D,color:white;
+    
+    class F,G azure;
+    class B,N,O frontend;
+    class C,D backend;
+    class K,L,M output;
+    class I,J analysis;
+```
 
-3. **Communication**:
-   - HTTP client for backend API interaction
-   - Request/response models for structured data exchange
+- **Argument Building:** The ExaminePlugin identifies contradictions and relevant passages in documents, constructing structured insights for cross-examination.
+- **RAG Integration:** Uses vector search to retrieve pertinent document chunks, ensuring contextually accurate analysis.
+- **Output:** Detailed argument insights appear in the canvas, with a concise summary in the chat panel.
 
-4. **Animation & Styling**:
-   - Sidebar animations for smooth transitions
-   - Dynamic message bubble creation and styling
-   - Scroll management for conversation history
+### Paralegal Mode Workflow
 
-### Communication Flow
+Paralegal mode dynamically selects tasks (notes, summarize, extract) based on query intent.
 
-The application follows a clean request-response cycle:
+```mermaid
+%%{init: {'theme': 'forest', 'themeVariables': { 'primaryColor': '#E84D3D', 'secondaryColor': '#0078D4', 'tertiaryColor': '#F5F5F5'}}}%%
+graph TD
+    A[User Query] -->|Input| B[WPF Frontend]
+    B -->|Sends to| C[QueryController]
+    C -->|Routes| D[SKOrchestratorService]
+    D -->|Calls| E[ParalegalPlugin]
+    E -->|Detects Intent| F[Azure OpenAI]
+    F -->|Classifies| G[Notes/Summarize/Extract]
+    E -->|Generates Embeddings| H[Azure OpenAI]
+    E -->|Vector Search| I[Azure Cognitive Search]
+    I -->|Retrieves| J[Relevant Docs]
+    E -->|Processes| K[Task Output]
+    K -->|Formats| L[Canvas Content]
+    D -->|Generates| M[Conversational Summary]
+    B -->|Displays| N[Chat Panel]
+    B -->|Displays| O[Canvas Panel]
+    
+    classDef azure fill:#0078D4,stroke:#006CBE,color:white;
+    classDef frontend fill:#3C8DBC,stroke:#367DA3,color:white;
+    classDef backend fill:#6118A0,stroke:#520E88,color:white;
+    classDef output fill:#E84D3D,stroke:#D23B2F,color:white;
+    
+    class F,H,I azure;
+    class B,N,O frontend;
+    class C,D backend;
+    class K,L,M output;
+```
 
-1. User inputs a query or uploads documents through the WPF interface
-2. The frontend formats the request with the current mode and sends it to the backend
-3. The SKOrchestratorService routes the request to appropriate plugins based on the mode
-4. Plugins leverage Azure services and Semantic Kernel to process the request
-5. Responses are generated with both conversational summaries and detailed content
-6. The frontend displays the conversational response in the chat panel and detailed content in the canvas
+- **Intent Detection:** Uses Azure OpenAI to classify the query as requesting notes, summarization, or entity extraction.
+- **RAG Process:** Retrieves relevant document chunks via vector search for task execution.
+- **Output:** Structured task results (e.g., extracted entities) are shown in the canvas, with a summary in the chat panel.
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 Counsel/
@@ -134,7 +209,6 @@ Counsel/
 │   │   └── CalendarService.cs         # Calendar generation
 │   └── Utils/                         # Helper utilities
 │       └── SearchIndexHelper.cs       # Azure Search index management
-│
 ├── Counsel.WpfClient/                 # WPF Frontend Application
 │   ├── App.xaml                       # Application definition
 │   ├── MainWindow.xaml                # UI layout definition
@@ -146,244 +220,222 @@ Counsel/
 │   └── Resources/                     # UI resources
 │       ├── Styles.xaml                # Application styling
 │       └── Icons/                     # UI icons
-│
 └── Counsel.Tests/                     # Test projects
     ├── BackendTests/                  # Backend unit tests
     └── IntegrationTests/              # End-to-end tests
 ```
 
-## Core Components
+## 🧠 Core Components
 
 ### Semantic Kernel Integration
 
-Counsel leverages Microsoft's Semantic Kernel as a foundational framework for AI capabilities:
+Counsel uses Semantic Kernel as the backbone for AI orchestration:
 
-- **Kernel Configuration**: Initialized in Program.cs with Azure OpenAI integration.
-- **Chat Completion**: Configured with Azure OpenAI deployment for conversational responses.
-- **Text Embedding**: Generates vector embeddings for document similarity searches.
-- **Prompt Templates**: Custom prompts for specialized tasks like intent detection and summary generation.
-
-The Semantic Kernel instance is injected into the orchestrator and plugins, providing a consistent AI interface throughout the application.
+- **Kernel Setup:** Configured in Program.cs with Azure OpenAI for chat completions and embeddings.
+- **Chat Completion:** Powers conversational responses with context-aware legal expertise.
+- **Text Embeddings:** Generates vectors for semantic search in document retrieval.
+- **Prompt Templates:** Custom prompts for intent detection, summarization, and task execution.
 
 ### Plugin System
 
-Counsel implements a modular plugin architecture that encapsulates domain-specific functionality:
+The modular plugin system encapsulates domain-specific logic:
 
 #### ParalegalPlugin
 
-The ParalegalPlugin specializes in document analysis and processing:
-
-```csharp
-// Key methods in ParalegalPlugin
-public async Task<string> GenerateDocNotesAsync(string[] documentChunks, string query)
-public async Task<string> SummarizeContextAsync(string[] documentChunks, string query)
-public async Task<string> ExtractKeyInfoAsync(string[] documentChunks, string query)
-```
-
-This plugin provides structured notes, summaries, and entity extraction from legal documents based on user queries and context.
+- **Functionality:** Generates notes, summarizes documents, and extracts entities (e.g., dates, amounts).
+- **Key Methods:**
+  ```csharp
+  public async Task<string> GenerateDocNotesAsync(string[] documentChunks, string query)
+  public async Task<string> SummarizeContextAsync(string[] documentChunks, string query)
+  public async Task<string> ExtractKeyInfoAsync(string[] documentChunks, string query)
+  ```
 
 #### ResearchPlugin
 
-The ResearchPlugin focuses on legal research and knowledge retrieval:
-
-```csharp
-// Key method in ResearchPlugin
-public async Task<string> PerformLegalResearchAsync(string query)
-```
-
-It leverages Azure Search and embedding-based similarity to retrieve relevant legal information and generate comprehensive research briefs.
+- **Functionality:** Conducts legal research using RAG and web search.
+- **Key Method:**
+  ```csharp
+  public async Task<string> PerformLegalResearchAsync(string query)
+  ```
+- **Details:** Combines Azure Cognitive Search for document retrieval with HTTP-based web searches for external legal resources.
 
 #### ExaminePlugin
 
-The ExaminePlugin specializes in cross-examination and critical analysis:
-
-```csharp
-// Key method in ExaminePlugin
-public async Task<string> FindRelevantPassagesAsync(string query)
-```
-
-This plugin identifies inconsistencies, contradictions, and key passages in document collections for evidence analysis.
+- **Functionality:** Builds arguments by identifying inconsistencies and key passages.
+- **Key Method:**
+  ```csharp
+  public async Task<string> FindRelevantPassagesAsync(string query)
+  ```
+- **Details:** Uses RAG to retrieve documents and analyzes them for contradictions to support cross-examination.
 
 ### Orchestration Service
 
-The `SKOrchestratorService` is the central coordination component that:
+The SKOrchestratorService coordinates plugins and modes:
 
-1. **Routes Queries**: Directs user queries to appropriate plugins based on the selected mode.
-2. **Manages Sessions**: Maintains conversation history for contextual understanding.
-3. **Handles Fallbacks**: Implements graceful degradation when specialized processing fails.
-4. **Generates Responses**: Creates both conversational summaries and detailed canvas content.
-
-Key orchestration methods include:
-
-```csharp
-// Core orchestration method
-public async Task<QueryResponse> ProcessQueryAsync(QueryRequest request)
-
-// Mode-specific methods
-private async Task<QueryResponse> ExecuteResearchModeAsync(QueryRequest request)
-private async Task<QueryResponse> ExecuteParalegalModeAsync(QueryRequest request)
-private async Task<QueryResponse> ExecuteExamineModeAsync(QueryRequest request)
-private async Task<QueryResponse> ExecuteEnhancedChatAsync(QueryRequest request, bool isFallback = false, string fallbackPrefix = null)
-```
-
-The orchestrator is designed for resilience with error handling, fallback chains, and context preservation.
+- **Query Routing:** Directs queries to the appropriate plugin based on mode.
+- **Session Management:** Maintains chat history (up to 10 messages) for context.
+- **Fallbacks:** Falls back to enhanced chat if specialized processing fails.
+- **Key Methods:**
+  ```csharp
+  public async Task<QueryResponse> ProcessQueryAsync(QueryRequest request)
+  private async Task<QueryResponse> ExecuteResearchModeAsync(QueryRequest request)
+  private async Task<QueryResponse> ExecuteParalegalModeAsync(QueryRequest request)
+  private async Task<QueryResponse> ExecuteExamineModeAsync(QueryRequest request)
+  ```
 
 ### Azure Services Integration
 
-Counsel integrates with several Azure services:
-
-- **Azure OpenAI**: Powers chat completions and embeddings generation.
-- **Azure Cognitive Search**: Enables vector search for document retrieval.
-- **Azure Application Insights**: Provides monitoring and logging (configured via Program.cs).
-
-The integration points are abstracted through service wrappers and injected via dependency injection.
+- **Azure OpenAI:** Drives chat completions and embedding generation.
+- **Azure Cognitive Search:** Enables vector-based document retrieval for RAG.
+- **Azure Application Insights:** Monitors performance and logs errors.
 
 ### Natural Language Calendar Generation
 
-One of Counsel's standout features is the ability to generate calendar events from natural language descriptions:
+- **Process:** Parses natural language (e.g., "Schedule a meeting next Tuesday at 10 AM") using DateResolutionService, generates .ics files via Ical.Net.
+- **Output:** Downloadable calendar events for seamless scheduling.
 
-1. The user describes an event in natural language (e.g., "Schedule a client meeting next Thursday at 2pm")
-2. The backend parses this using the DateResolutionService to extract temporal data
-3. The Calendar Generation service creates a standardized iCalendar (.ics) file using Ical.Net
-4. The file is returned to the client for saving to the local system
+## 🔄 Operating Modes
 
-This feature streamlines appointment and deadline management for legal professionals.
+<div align="center">
+<table>
+  <tr>
+    <th style="background-color: #3C8DBC; color: white; padding: 10px;">Mode</th>
+    <th style="background-color: #3C8DBC; color: white; padding: 10px;">Description</th>
+    <th style="background-color: #3C8DBC; color: white; padding: 10px;">Key Features</th>
+  </tr>
+  <tr>
+    <td><b>💬 Chat Only</b></td>
+    <td>General-purpose legal assistant with context-aware responses</td>
+    <td>• Uses session history for coherent conversations<br>• Fallback for all other modes</td>
+  </tr>
+  <tr>
+    <td><b>🔍 Deep Research</b></td>
+    <td>Conducts in-depth legal research using RAG and web search</td>
+    <td>• Structured research briefs with citations<br>• Combines internal and external resources</td>
+  </tr>
+  <tr>
+    <td><b>📋 Paralegal</b></td>
+    <td>Dynamically selects tasks based on detected intent</td>
+    <td>• Notes generation<br>• Document summarization<br>• Entity extraction</td>
+  </tr>
+  <tr>
+    <td><b>⚖️ Cross-Examine</b></td>
+    <td>Builds legal arguments by analyzing documents</td>
+    <td>• Inconsistency detection<br>• Key passage identification<br>• Argument construction</td>
+  </tr>
+</table>
+</div>
 
-## Operating Modes
-
-Counsel operates in four distinct modes, each tailored for specific legal workflows:
-
-### Chat Only
-
-The default conversational mode provides:
-- General legal assistant capabilities
-- Context-aware responses using session history
-- Professional legal terminology and principles
-
-### Deep Research
-
-Research mode activates specialized legal research functionality:
-- Comprehensive analysis of legal questions
-- Citation of relevant principles and precedents
-- Structured research briefs displayed in the canvas
-
-### Paralegal
-
-Paralegal mode offers advanced document processing:
-- Intelligent task selection (notes, summarize, extract) based on query intent
-- RAG-powered document retrieval using vector similarity
-- Structured output formats for legal documentation
-
-### Cross-Examine
-
-Cross-examination mode specializes in critical analysis:
-- Finding inconsistencies in evidence or testimony
-- Identifying relevant passages for questioning
-- Highlighting contradictions or weaknesses in documentation
-
-## Installation & Setup
+## 🔧 Installation & Setup
 
 ### Prerequisites
 
-- .NET 8.0 SDK
+- C# 8.0 SDK
 - Visual Studio 2022 or later
-- Azure subscription with OpenAI and Cognitive Search services
+- Azure subscription (OpenAI, Cognitive Search)
 
 ### Configuration
 
-1. Clone the repository
-2. Update the `appsettings.json` with your Azure service credentials:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/counsel.git
+   ```
 
-```json
-{
-  "AzureOpenAI": {
-    "Endpoint": "your-openai-endpoint",
-    "ApiKey": "your-openai-key",
-    "DeploymentName": "your-deployment-name"
-  },
-  "AzureSearch": {
-    "Endpoint": "your-search-endpoint",
-    "ApiKey": "your-search-key",
-    "IndexName": "legal-documents"
-  }
-}
-```
+2. Update appsettings.json with Azure credentials:
+   ```json
+   {
+     "AzureOpenAI": {
+       "Endpoint": "your-openai-endpoint",
+       "ApiKey": "your-openai-key",
+       "DeploymentName": "your-deployment-name"
+     },
+     "AzureSearch": {
+       "Endpoint": "your-search-endpoint",
+       "ApiKey": "your-search-key",
+       "IndexName": "legal-documents"
+     }
+   }
+   ```
 
-3. Build and run the application:
+3. Build and run:
+   ```bash
+   dotnet build
+   dotnet run --project Counsel.BackendApi
+   ```
 
-```bash
-dotnet build
-dotnet run --project Counsel.BackendApi
-```
+4. Launch the WPF client:
+   ```bash
+   dotnet run --project Counsel.WpfClient
+   ```
 
-4. Launch the WPF client from Visual Studio or via:
+## 🚀 Usage Examples
 
-```bash
-dotnet run --project Counsel.WpfClient
-```
+### Legal Research
 
-## Usage Examples
+1. Select Deep Research mode
+2. Query: "Key precedents for fair use in copyright law"
+3. Review the research brief in the canvas and conversational summary in the chat
 
-### Legal Research Scenario
+### Document Analysis
 
-1. Select the "Deep Research" mode
-2. Enter a query like "What are the key precedents for fair use in copyright law?"
-3. The system will generate a comprehensive research brief in the canvas
-4. Review the conversational summary in the chat window
-5. Save or continue the conversation with follow-up questions
+1. Upload contracts in Paralegal mode
+2. Query: "Extract all dates and monetary amounts"
+3. View extracted entities in the canvas
 
-### Document Analysis Scenario
+### Calendar Event
 
-1. Upload legal documents using the attachment button
-2. Select "Paralegal" mode
-3. Ask "Extract all dates and monetary amounts from these contracts"
-4. The system will identify the intent as "extract" and process accordingly
-5. Review extracted entities in the structured format in the canvas
+1. Query: "Schedule a deposition next Tuesday at 10 AM"
+2. Click the calendar icon to download the .ics file
 
-### Calendar Event Creation
+## 💻 Technologies Used
 
-1. Type "Schedule a deposition with Dr. Smith next Tuesday at 10 AM"
-2. Click the calendar icon to generate an .ics file
-3. Save the file and add it to your calendar application
+<div align="center">
+<table>
+  <tr>
+    <th style="background-color: #6118A0; color: white; padding: 10px;">Category</th>
+    <th style="background-color: #6118A0; color: white; padding: 10px;">Technologies</th>
+  </tr>
+  <tr>
+    <td><b>Backend</b></td>
+    <td>ASP.NET Core (C# 8) • Semantic Kernel • Azure OpenAI • Azure Cognitive Search • Ical.Net</td>
+  </tr>
+  <tr>
+    <td><b>Frontend</b></td>
+    <td>WPF (XAML) • Custom animations • Material Design influences</td>
+  </tr>
+  <tr>
+    <td><b>Tools</b></td>
+    <td>Visual Studio 2022 • Azure Developer CLI • .NET Test Framework</td>
+  </tr>
+</table>
+</div>
 
-## Technologies Used
+## 🔮 Future Enhancements
 
-- **Backend**:
-  - ASP.NET Core (.NET 8)
-  - Semantic Kernel
-  - Azure OpenAI Service
-  - Azure Cognitive Search
-  - Ical.Net for calendar generation
+| Enhancement | Description |
+|-------------|-------------|
+| 🖥️ **Multi-Platform** | Web and mobile interfaces for access from any device |
+| 📄 **Document Generation** | AI-driven legal document templates and assembly |
+| ⏱️ **Timeline Visualization** | Interactive case timelines with event linking |
+| 👥 **Collaboration** | Real-time sharing and co-editing for legal teams |
+| 🔄 **Integrations** | Connect with legal practice management systems |
 
-- **Frontend**:
-  - WPF (Windows Presentation Foundation)
-  - XAML for UI definition
-  - Custom animations and UI elements
-
-- **Development Tools**:
-  - Visual Studio 2022
-  - Azure Developer CLI
-  - .NET Test Framework
-
-## Future Enhancements
-
-- **Multi-platform Support**: Extend to web and mobile interfaces
-- **Document Generation**: Create legal documents from templates and AI suggestions
-- **Timeline Visualization**: Interactive timelines for case events and deadlines
-- **Voice Interface**: Add speech recognition and response capabilities
-- **Collaborative Features**: Real-time sharing and collaboration tools
-- **Integration Ecosystem**: Connect with legal practice management systems
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit changes: `git commit -m 'Add your feature'`
+4. Push: `git push origin feature/your-feature`
 5. Open a Pull Request
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License - see the LICENSE file for details.
+
+---
+
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/0a42fb42-4c80-4948-bb21-e01dc99ddd16" width="30" align="center" alt="Counsel Logo">
+  <br>
+  <em>Built with 💡 for the Microsoft AI Agents Hackathon 2025</em>
+</div>
