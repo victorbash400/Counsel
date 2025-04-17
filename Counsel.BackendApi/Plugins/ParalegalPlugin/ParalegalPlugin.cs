@@ -1,7 +1,7 @@
 ﻿using Microsoft.SemanticKernel;
 using System.ComponentModel;
 using System.Threading.Tasks;
-using System.Text.Json;
+using System;
 
 namespace Counsel.BackendApi.Plugins
 {
@@ -16,7 +16,7 @@ namespace Counsel.BackendApi.Plugins
         }
 
         [KernelFunction]
-        [Description("Generates structured notes (timeline, points, questions) from document chunks")]
+        [Description("Generates professional legal notes from document chunks")]
         public async Task<string> GenerateDocNotesAsync(
             [Description("List of document contents to analyze")] string[] chunks,
             [Description("User query for context")] string query)
@@ -28,17 +28,41 @@ namespace Counsel.BackendApi.Plugins
                 return "No content to analyze.";
             }
 
-            var promptTemplate = @"Based on the query '{{query}}' and the following document excerpts, generate structured notes for a legal professional in JSON format:
-            {
-              ""timeline"": [],
-              ""keyPoints"": [],
-              ""questions"": []
-            }
-            - timeline: List of events in chronological order (e.g., {""date"": ""2024-01-01"", ""event"": ""...""}).
-            - keyPoints: Bulleted list of key arguments or facts (e.g., {""point"": ""..."", ""source"": ""...""}).
-            - questions: List of unanswered questions or follow-ups (e.g., ""..."").
-            Excerpts:
-            {{chunks}}";
+            var promptTemplate = @"Based on the query '{{query}}' and the following document excerpts, generate structured legal notes in a professional format:
+
+INSTRUCTIONS:
+1. Create a well-formatted document with clear sections and proper indentation
+2. Include only sections that are relevant to the content (not all documents will have timelines, for example)
+3. Format should be clean professional text that will be displayed as-is (NO markdown symbols or formatting)
+4. Use CAPITALIZED HEADERS and indentation for structure instead of markdown
+5. Use bullet points (•) where appropriate
+6. Include the following sections ONLY IF RELEVANT:
+   - CASE SUMMARY
+   - TIMELINE OF EVENTS (only if chronology is important)
+   - KEY FACTS & ARGUMENTS
+   - LEGAL ISSUES
+   - PRECEDENT CONSIDERATIONS
+   - CRITICAL QUESTIONS & FOLLOW-UPS
+   - NEXT STEPS
+
+Example format:
+--------------------
+LEGAL MEMORANDUM
+Re: [Brief subject based on query]
+
+CASE SUMMARY
+[Concise summary paragraph]
+
+KEY FACTS & ARGUMENTS
+• [Fact/argument 1]
+• [Fact/argument 2]
+...
+
+[Other relevant sections as needed]
+--------------------
+
+Document excerpts to analyze:
+{{chunks}}";
 
             // Manually render the prompt by replacing placeholders
             var renderedPrompt = promptTemplate
@@ -47,18 +71,9 @@ namespace Counsel.BackendApi.Plugins
 
             // Pass the rendered prompt with no arguments, since all variables are replaced
             var result = await _kernel.InvokePromptAsync(renderedPrompt, new KernelArguments());
-            var json = result.GetValue<string>() ?? "{}";
-            try
-            {
-                JsonSerializer.Deserialize<object>(json); // Validate JSON
-                Console.WriteLine($"GenerateDocNotesAsync result: {json.Substring(0, Math.Min(50, json.Length))}...");
-                return json;
-            }
-            catch
-            {
-                Console.WriteLine("GenerateDocNotesAsync: Invalid JSON, returning empty object.");
-                return "{}";
-            }
+            var notes = result.GetValue<string>() ?? "Error generating notes.";
+            Console.WriteLine($"GenerateDocNotesAsync result: {notes.Substring(0, Math.Min(50, notes.Length))}...");
+            return notes;
         }
 
         [KernelFunction]
@@ -74,8 +89,18 @@ namespace Counsel.BackendApi.Plugins
                 return "No content to summarize.";
             }
 
-            var promptTemplate = @"Summarize the following document excerpts into a concise paragraph, focusing on aspects relevant to the query '{{query}}':
-            {{chunks}}";
+            var promptTemplate = @"Summarize the following document excerpts in the style of a professional legal brief summary, focusing on aspects relevant to the query '{{query}}':
+            
+INSTRUCTIONS:
+1. Write in a formal, concise legal style
+2. Focus on the most pertinent facts and considerations
+3. Organize information logically
+4. Use proper legal terminology
+5. Be objective and precise
+6. Format as PLAIN TEXT with no markdown or special formatting symbols
+
+Document excerpts:
+{{chunks}}";
 
             var renderedPrompt = promptTemplate
                 .Replace("{{query}}", query)
@@ -88,7 +113,7 @@ namespace Counsel.BackendApi.Plugins
         }
 
         [KernelFunction]
-        [Description("Extracts key entities (people, dates, organizations, terms, amounts) from document chunks")]
+        [Description("Extracts key entities from document chunks in a professional legal format")]
         public async Task<string> ExtractKeyInfoAsync(
             [Description("List of document contents to analyze")] string[] chunks,
             [Description("User query for context")] string query)
@@ -100,34 +125,53 @@ namespace Counsel.BackendApi.Plugins
                 return "No content to analyze.";
             }
 
-            var promptTemplate = @"From the following document excerpts, extract key entities (people, dates, organizations, defined terms, monetary amounts) relevant to the query '{{query}}'. Return as a JSON object with lists for each entity type:
-            {
-              ""people"": [],
-              ""dates"": [],
-              ""organizations"": [],
-              ""terms"": [],
-              ""amounts"": []
-            }
-            Excerpts:
-            {{chunks}}";
+            var promptTemplate = @"From the following document excerpts, extract key entities relevant to the query '{{query}}' and present them in a professional legal index format:
+
+INSTRUCTIONS:
+1. Create a well-formatted document with clear categories
+2. Only include categories that contain relevant information
+3. Format as a professional legal reference document using PLAIN TEXT only (NO markdown)
+4. Use appropriate legal terminology and citation formats
+5. Use CAPITALIZED HEADERS and indentation for structure
+
+Example format:
+--------------------
+CASE REFERENCE INDEX
+
+PARTIES
+• Smith, John (Plaintiff)
+• Acme Corporation (Defendant)
+...
+
+KEY DATES
+• January 15, 2024 - Complaint filed
+• March 3, 2024 - Motion to dismiss submitted
+...
+
+ORGANIZATIONS
+• [List relevant organizations]
+
+DEFINED TERMS
+• [List important defined terms]
+
+MONETARY FIGURES
+• [List relevant amounts and descriptions]
+
+JURISDICTIONAL CONSIDERATIONS
+• [List relevant jurisdictions]
+--------------------
+
+Document excerpts:
+{{chunks}}";
 
             var renderedPrompt = promptTemplate
                 .Replace("{{query}}", query)
                 .Replace("{{chunks}}", string.Join("\n", chunks));
 
             var result = await _kernel.InvokePromptAsync(renderedPrompt, new KernelArguments());
-            var json = result.GetValue<string>() ?? "{}";
-            try
-            {
-                JsonSerializer.Deserialize<object>(json); // Validate JSON
-                Console.WriteLine($"ExtractKeyInfoAsync result: {json.Substring(0, Math.Min(50, json.Length))}...");
-                return json;
-            }
-            catch
-            {
-                Console.WriteLine("ExtractKeyInfoAsync: Invalid JSON, returning empty object.");
-                return "{}";
-            }
+            var keyInfo = result.GetValue<string>() ?? "Error extracting key information.";
+            Console.WriteLine($"ExtractKeyInfoAsync result: {keyInfo.Substring(0, Math.Min(50, keyInfo.Length))}...");
+            return keyInfo;
         }
     }
 }

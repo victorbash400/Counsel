@@ -81,7 +81,7 @@ namespace Counsel.BackendApi.Plugins
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing query: {Query}", ex.Message);
-                return "<div class=\"error\">An error occurred: " + ex.Message + ". Please refine your query or check document availability.</div>";
+                return $"ERROR: {ex.Message}. Please refine your query or check document availability.";
             }
         }
 
@@ -192,7 +192,7 @@ namespace Counsel.BackendApi.Plugins
 
             try
             {
-                // Optimized prompt for hackathon: detailed, concise, and legally precise
+                // Updated prompt for plain text formatted output with good readability
                 var promptTemplate = @"# LEGAL ARGUMENT ANALYSIS
 
 ## QUERY
@@ -216,43 +216,70 @@ You are an expert legal assistant tasked with analyzing documents and web source
 ## WEB RESULTS
 {{webContent}}
 
-## OUTPUT FORMAT (HTML)
-<style>
-.legal-analysis { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f9f9f9; border-radius: 8px; }
-h1, h2, h3 { color: #2c3e50; }
-h3 { border-left: 4px solid #3498db; padding-left: 10px; }
-p, li { line-height: 1.6; color: #34495e; }
-ul { padding-left: 20px; }
-a { color: #3498db; text-decoration: none; }
-a:hover { text-decoration: underline; }
-.error { color: #e74c3c; font-weight: bold; }
-</style>
-<div class=""legal-analysis"">
-    <h1>Legal Argument Analysis</h1>
-    <h2>Query: {{query}}</h2>
-    <div>
-        <h3>Relevant Passages</h3>
-        <ul>
-            [List passages with legal context, clause details, and citations]
-        </ul>
-    </div>
-    <div>
-        <h3>Precedent and Principle Comparison</h3>
-        <p>[Analyze documents and web-sourced cases/statutes, focusing on relevancegiene to breach, remedies, or defenses]</p>
-    </div>
-    <div>
-        <h3>Gaps and Ambiguities</h3>
-        <ul>
-            [List specific unresolved issues, e.g., unclear terms, missing notices]
-        </ul>
-    </div>
-    <div>
-        <h3>Metadata</h3>
-        <p>Documents Analyzed: [Count]</p>
-        <p>Search Confidence Score: [Average score]</p>
-        <p>Analysis Timestamp: [Current timestamp]</p>
-    </div>
-</div>";
+## OUTPUT FORMAT
+Generate your response in plain text format with these formatting guidelines:
+1. Use ASCII text formatting techniques for structure (e.g., underlines, indentation, spacing)
+2. Create a professional, legal-style report with clear sections
+3. Format all dates, amounts, legal terms consistently
+4. Use ASCII symbols for structure (e.g., -, =, *, >) 
+5. Create a clean header with border lines
+6. Use indentation for quoted passages (4 spaces)
+7. Format citations consistently with appropriate indentation
+8. Use whitespace effectively to separate sections
+9. Create an organized hierarchy with main sections and subsections
+10. Include a metadata summary at the end
+
+Follow this structure:
+- Professional header with borders (====== or -------)
+- Main title and query identification
+- Date/timestamp
+- Key Passages section with analysis
+- Legal Authority section with web references
+- Gaps & Ambiguities section
+- Metadata summary
+
+Example formatting:
+===============================================================
+LEGAL ANALYSIS REPORT
+---------------------------------------------------------------
+QUERY: ""{{query}}""
+Generated: {{timestamp}}
+===============================================================
+
+KEY PASSAGES & ANALYSIS
+---------------------------------------------------------------
+[Section content with proper spacing and paragraph structure]
+
+> Quoted passage from document with proper indentation
+> Continued indented text
+
+Source: [Doc ID: 12345, Score: 0.92]
+
+Analysis:
+This passage demonstrates [legal implication] because...
+
+[Additional passages with consistent formatting]
+
+LEGAL AUTHORITY & PRECEDENT
+---------------------------------------------------------------
+[Web references and case law structured in a readable format]
+
+Reference: Smith v. Jones (2023)
+Source: [Legal Database, URL]
+
+[Analysis of applicable law]
+
+GAPS & AMBIGUITIES
+---------------------------------------------------------------
+1. [First gap identified]
+2. [Second gap identified]
+
+METADATA
+---------------------------------------------------------------
+Documents Analyzed: {{documentCount}}
+Average Confidence Score: {{averageScore}}
+Analysis Timestamp: {{timestamp}}
+===============================================================";
 
                 var documentContent = new StringBuilder();
                 foreach (var chunk in documentChunks)
@@ -263,13 +290,19 @@ a:hover { text-decoration: underline; }
                     documentContent.AppendLine();
                 }
 
+                var timestamp = DateTime.Now.ToString("MMMM d, yyyy 'at' h:mm tt");
+                var avgScore = documentChunks.Any() ? documentChunks.Average(d => d.Score).ToString("F2") : "N/A";
+
                 var renderedPrompt = promptTemplate
                     .Replace("{{query}}", query)
                     .Replace("{{documentChunks}}", documentContent.ToString())
-                    .Replace("{{webContent}}", webContent);
+                    .Replace("{{webContent}}", webContent)
+                    .Replace("{{timestamp}}", timestamp)
+                    .Replace("{{documentCount}}", documentChunks.Count.ToString())
+                    .Replace("{{averageScore}}", avgScore);
 
                 var result = await _kernel.InvokePromptAsync(renderedPrompt, new KernelArguments());
-                var analysis = result.GetValue<string>() ?? "<div class=\"error\">Error generating legal analysis.</div>";
+                var analysis = result.GetValue<string>() ?? "Error generating legal analysis.";
 
                 _logger.LogInformation("Legal analysis generated successfully");
                 return analysis;
@@ -277,7 +310,14 @@ a:hover { text-decoration: underline; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating legal analysis: {ErrorMessage}", ex.Message);
-                return "<div class=\"error\">Error generating legal analysis: " + ex.Message + "</div>";
+                return @"===============================================================
+ERROR GENERATING LEGAL ANALYSIS
+===============================================================
+
+" + ex.Message + @"
+
+Please refine your query or check document availability.
+===============================================================";
             }
         }
 

@@ -1,72 +1,68 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media.Animation; // Needed for animations
-using System.Windows.Threading;       // Needed for DispatcherTimer
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using Counsel.Models;
+using Microsoft.Win32; // Added for OpenFileDialog
+using System.IO; // Added for file handling
 
 namespace Counsel
 {
-    /// <summary>
-    /// Enum defining the different operational modes of the application.
-    /// 'None' represents the default Chat Only mode where the canvas is hidden.
-    /// </summary>
-    public enum AppMode
-    {
-        DeepResearch,
-        Paralegal,
-        CrossExamine,
-        None // Represents Chat Only mode (Canvas hidden)
-    }
-
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
-        private AppMode _currentMode = AppMode.None; // Default to Chat Only
+        private Counsel.Models.AppMode _currentMode = Counsel.Models.AppMode.None; // Default to Chat Only
         private bool _isLoaded = false;             // Flag to indicate if window is fully loaded
         private readonly double _canvasTargetWidth = 400.0; // Target width for the canvas sidebar content
         private readonly GridLength _canvasTargetGridWidth; // Target GridLength for the column
         private Storyboard _sidebarStoryboard;      // Storyboard for sidebar animations
+        private readonly HttpClient _httpClient;
+        private readonly string _apiBaseUrl = "https://localhost:7274"; // Updated to match backend port
 
         public MainWindow()
         {
             InitializeComponent();
-            // Store the target GridLength based on the double width
             _canvasTargetGridWidth = new GridLength(_canvasTargetWidth);
             this.Loaded += MainWindow_Loaded;
-            // Event handlers are assigned in XAML (e.g., Click="...")
+
+            // Initialize HttpClient with SSL bypass for localhost (development only)
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true // Bypass SSL validation
+            };
+            _httpClient = new HttpClient(handler)
+            {
+                BaseAddress = new Uri(_apiBaseUrl)
+            };
+            _httpClient.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
         }
 
-        /// <summary>
-        /// Handles the Window Loaded event. Sets initial state.
-        /// </summary>
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             _isLoaded = true;
 
-            // Initialize Storyboard
             _sidebarStoryboard = new Storyboard();
 
-            // --- Initial State Setup (Chat Only Mode) ---
-            ChatOnlyModeButton.IsChecked = true; // Set the radio button
-            _currentMode = AppMode.None;         // Set the internal mode
+            ChatOnlyModeButton.IsChecked = true;
+            _currentMode = Counsel.Models.AppMode.None;
 
-            // **MODIFIED**: Explicitly collapse the Canvas COLUMN on load
             CanvasColumn.Width = new GridLength(0);
 
-            // Set the RightSidebar CONTENT properties for the hidden state (no animation needed here)
             RightSidebar.Width = 0;
             RightSidebar.Opacity = 0;
-            RightSidebar.Visibility = Visibility.Collapsed; // Ensure content is collapsed too
+            RightSidebar.Visibility = Visibility.Collapsed;
 
-            // Update UI elements based on initial state
             UpdateContextDisplay();
             UpdatePlaceholderVisibility();
-            UpdateInputPlaceholderForMode(_currentMode); // Set initial placeholder
+            UpdateInputPlaceholderForMode(_currentMode);
 
-            // Set initial case context text from the ComboBox selection
             if (CaseSelectorComboBox.SelectedItem is ComboBoxItem selectedItem)
             {
                 ContextCaseText.Text = $"Case: {selectedItem.Content}";
@@ -76,12 +72,9 @@ namespace Counsel
                 ContextCaseText.Text = "Case: [Select a Case]";
             }
 
-            // Add initial system message confirming mode
             AddMessageBubble($"[System] Started in {GetModeFriendlyName(_currentMode)} mode. Canvas is hidden.", false, "System");
         }
 
-        // --- Input Handling ---
-        // (No changes in this section)
         private void RealInputTextBox_GotFocus(object sender, RoutedEventArgs e)
         {
             UpdatePlaceholderVisibility();
@@ -126,18 +119,85 @@ namespace Counsel
             }
         }
 
-        private void SendMessage(string message)
+        private async void SendMessage(string message)
         {
             if (!_isLoaded || ConversationPanel == null || ConversationScrollViewer == null) return;
 
             ClearWelcomeMessageIfNeeded();
             AddMessageBubble(message, isFromUser: true);
-            SimulateResponse(message);
+
+            string agentName = GetAgentNameForTask();
+            TextBlock thinkingIndicator = new TextBlock
+            {
+                Style = (Style)FindResource("ThinkingIndicatorText"),
+                Text = $"Counsel is thinking... [{agentName} Active]"
+            };
+            ConversationPanel.Children.Add(thinkingIndicator);
+            ConversationScrollViewer.ScrollToBottom();
+
+            try
+            {
+                var request = new Counsel.Models.QueryRequest
+                {
+                    Query = message,
+                    Mode = _currentMode,
+                    ChatHistory = null
+                };
+
+                var response = await SendQueryAsync(request);
+
+                if (ConversationPanel.Children.Contains(thinkingIndicator))
+                {
+                    ConversationPanel.Children.Remove(thinkingIndicator);
+                }
+
+                AddMessageBubble(response.Response, isFromUser: false, agentName: agentName);
+
+                if (_currentMode != Counsel.Models.AppMode.None)
+                {
+                    UpdateCanvas(response.CanvasContent, GetCanvasTitle());
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ConversationPanel.Children.Contains(thinkingIndicator))
+                {
+                    ConversationPanel.Children.Remove(thinkingIndicator);
+                }
+
+                AddMessageBubble($"[System] Error: Unable to process your request. {ex.Message}", false, "System");
+            }
 
             RealInputTextBox.Clear();
             SendButton.IsEnabled = false;
             UpdatePlaceholderVisibility();
             RealInputTextBox.Focus();
+        }
+
+        private async Task<Counsel.Models.QueryResponse> SendQueryAsync(Counsel.Models.QueryRequest request)
+        {
+            try
+            {
+                Console.WriteLine($"Sending request: {JsonSerializer.Serialize(request)}");
+                var response = await _httpClient.PostAsJsonAsync("/api/counsel/query", request);
+                response.EnsureSuccessStatusCode();
+                var queryResponse = await response.Content.ReadFromJsonAsync<Counsel.Models.QueryResponse>();
+
+                if (queryResponse == null)
+                {
+                    throw new Exception("Received an empty response from the server.");
+                }
+
+                return queryResponse;
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new Exception($"Network error: {ex.Message}");
+            }
+            catch (JsonException ex)
+            {
+                throw new Exception($"Response parsing error: {ex.Message}");
+            }
         }
 
         private void ClearWelcomeMessageIfNeeded()
@@ -148,8 +208,6 @@ namespace Counsel
             }
         }
 
-        // --- Conversation Display ---
-        // (No changes in this section)
         private void AddMessageBubble(string message, bool isFromUser, string agentName = null)
         {
             if (!_isLoaded || ConversationPanel == null || ConversationScrollViewer == null)
@@ -210,63 +268,6 @@ namespace Counsel
             ConversationScrollViewer.ScrollToBottom();
         }
 
-        private void SimulateResponse(string userMessage)
-        {
-            if (!_isLoaded || ConversationPanel == null || ConversationScrollViewer == null)
-            {
-                Dispatcher.InvokeAsync(() => SimulateResponse(userMessage), DispatcherPriority.Loaded);
-                return;
-            }
-
-            string agentName = GetAgentNameForTask();
-            TextBlock thinkingIndicator = new TextBlock
-            {
-                Style = (Style)FindResource("ThinkingIndicatorText"),
-                Text = $"Counsel is thinking... [{agentName} Active]"
-            };
-            ConversationPanel.Children.Add(thinkingIndicator);
-            ConversationScrollViewer.ScrollToBottom();
-
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
-            timer.Tick += (s, e) =>
-            {
-                timer.Stop();
-                if (ConversationPanel.Children.Contains(thinkingIndicator))
-                {
-                    ConversationPanel.Children.Remove(thinkingIndicator);
-                }
-                string response = GeneratePlaceholderResponse(agentName, userMessage);
-                AddMessageBubble(response, isFromUser: false, agentName: agentName);
-
-                if (_currentMode != AppMode.None)
-                {
-                    UpdateCanvas(GenerateCanvasContent(userMessage, agentName), GetCanvasTitle());
-                }
-            };
-            timer.Start();
-        }
-
-        private string GeneratePlaceholderResponse(string agentName, string userMessage)
-        {
-            string caseContext = "[No Case Selected]";
-            if (CaseSelectorComboBox.SelectedItem is ComboBoxItem selectedItem && CaseSelectorComboBox.SelectedIndex > -1)
-            {
-                string content = selectedItem.Content.ToString();
-                if (!content.StartsWith("["))
-                {
-                    caseContext = content;
-                }
-            }
-            string contextInfo = $" (Context: Case '{caseContext}', Mode: {_currentMode})";
-            switch (agentName)
-            {
-                case "Deep Research Agent": return $"[Deep Research] Analyzing your query about '{Shorten(userMessage)}'.{contextInfo}";
-                case "Paralegal Agent": return $"[Paralegal] Processing request related to '{Shorten(userMessage)}'.{contextInfo}";
-                case "Cross Examine Agent": return $"[Cross Examine] Evaluating testimony regarding '{Shorten(userMessage)}'.{contextInfo}";
-                case "General Agent": default: return $"[Response] Received your message: '{Shorten(userMessage)}'.{contextInfo}";
-            }
-        }
-
         private string Shorten(string text, int maxLength = 25)
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
@@ -278,32 +279,10 @@ namespace Counsel
         {
             switch (_currentMode)
             {
-                case AppMode.DeepResearch: return "Deep Research Agent";
-                case AppMode.Paralegal: return "Paralegal Agent";
-                case AppMode.CrossExamine: return "Cross Examine Agent";
-                case AppMode.None: default: return "General Agent";
-            }
-        }
-
-        // --- Canvas Content Generation ---
-        // (No changes in this section)
-        private string GenerateCanvasContent(string userMessage, string agentName)
-        {
-            string caseContext = "[No Case Selected]";
-            if (CaseSelectorComboBox.SelectedItem is ComboBoxItem selectedItem && CaseSelectorComboBox.SelectedIndex > -1)
-            {
-                string content = selectedItem.Content.ToString();
-                if (!content.StartsWith("["))
-                {
-                    caseContext = content;
-                }
-            }
-            switch (_currentMode)
-            {
-                case AppMode.DeepResearch: return $"───────────────────────────────\nISSUE: Whether '{Shorten(userMessage)}' applies in {caseContext}\n───────────────────────────────\n\n🔹 Summary:\n[Placeholder summary based on '{Shorten(userMessage)}'...]\n\n🔹 Statutory References:\n- [Placeholder Statute 1]\n- [Placeholder Statute 2]\n\n🔹 Relevant Cases:\n- *[Case Name 1]* – [Brief relevance]\n- *[Case Name 2]* – [Brief relevance]\n\n🔹 Commentary:\n[Placeholder analysis based on precedents...]";
-                case AppMode.Paralegal: return $"───────────────────────────────\n🔍 Mentions of \"{Shorten(userMessage)}\"\n───────────────────────────────\n\n📁 File: [Placeholder Doc 1.pdf]\nPg X: “[Placeholder mention of {Shorten(userMessage)}…]”\n\n📁 File: [Placeholder Doc 2.docx]\nPg Y: “[Another reference to {Shorten(userMessage)}…]”\n\nSummary:\nMultiple documents reference '{Shorten(userMessage)}' in the context of {caseContext}.\n[Placeholder action item or note].";
-                case AppMode.CrossExamine: return $"───────────────────────────────\n🎯 Cross-Examination Insight\n───────────────────────────────\n\n🔹 Flag: Potential Contradiction\nWitness statement regarding \"{Shorten(userMessage)}\" may conflict with [Placeholder Evidence Doc/Pg].\n\n🔹 Suggested Follow-up:\n“Could you elaborate on your testimony concerning '{Shorten(userMessage)}' in light of [Evidence]?”\n\n🔹 Note Reference:\n[Placeholder link/reference to testimony notes]";
-                case AppMode.None: default: return "[Canvas not available in Chat Only mode]";
+                case Counsel.Models.AppMode.DeepResearch: return "Deep Research Agent";
+                case Counsel.Models.AppMode.Paralegal: return "Paralegal Agent";
+                case Counsel.Models.AppMode.CrossExamine: return "Cross Examine Agent";
+                case Counsel.Models.AppMode.None: default: return "General Agent";
             }
         }
 
@@ -311,24 +290,22 @@ namespace Counsel
         {
             switch (_currentMode)
             {
-                case AppMode.DeepResearch: return "Legal Research Brief";
-                case AppMode.Paralegal: return "Evidence Summary";
-                case AppMode.CrossExamine: return "Insight Sheet";
-                case AppMode.None: default: return "Canvas";
+                case Counsel.Models.AppMode.DeepResearch: return "Legal Research Brief";
+                case Counsel.Models.AppMode.Paralegal: return "Evidence Summary";
+                case Counsel.Models.AppMode.CrossExamine: return "Insight Sheet";
+                case Counsel.Models.AppMode.None: default: return "Canvas";
             }
         }
-
-        // --- Mode Switching & Animation ---
 
         private void ModeButton_Checked(object sender, RoutedEventArgs e)
         {
             if (!_isLoaded || sender == null) return;
 
-            AppMode newMode = AppMode.None;
-            if (sender == ChatOnlyModeButton) newMode = AppMode.None;
-            else if (sender == DeepResearchModeButton) newMode = AppMode.DeepResearch;
-            else if (sender == ParalegalModeButton) newMode = AppMode.Paralegal;
-            else if (sender == CrossExamineModeButton) newMode = AppMode.CrossExamine;
+            Counsel.Models.AppMode newMode = Counsel.Models.AppMode.None;
+            if (sender == ChatOnlyModeButton) newMode = Counsel.Models.AppMode.None;
+            else if (sender == DeepResearchModeButton) newMode = Counsel.Models.AppMode.DeepResearch;
+            else if (sender == ParalegalModeButton) newMode = Counsel.Models.AppMode.Paralegal;
+            else if (sender == CrossExamineModeButton) newMode = Counsel.Models.AppMode.CrossExamine;
 
             if (newMode != _currentMode)
             {
@@ -336,9 +313,9 @@ namespace Counsel
             }
         }
 
-        private void UpdateMode(AppMode newMode)
+        private void UpdateMode(Counsel.Models.AppMode newMode)
         {
-            if (!_isLoaded || RightSidebar == null || CanvasColumn == null) return; // Ensure elements are ready
+            if (!_isLoaded || RightSidebar == null || CanvasColumn == null) return;
 
             _currentMode = newMode;
             string modeName = GetModeFriendlyName(_currentMode);
@@ -347,47 +324,38 @@ namespace Counsel
             UpdateInputPlaceholderForMode(_currentMode);
             UpdateContextDisplay();
 
-            if (_currentMode == AppMode.None)
+            if (_currentMode == Counsel.Models.AppMode.None)
             {
-                // Hide Canvas
-                AnimateSidebar(false); // Animate content out, collapse column on complete
+                AnimateSidebar(false);
                 systemMessage += " Canvas hidden.";
-                UpdateCanvas("", ""); // Clear canvas content
+                UpdateCanvas("", "");
             }
             else
             {
-                // Show Canvas
-                UpdateCanvas($"[Enter query to view {GetCanvasTitle()}.]", GetCanvasTitle()); // Set initial content
-                AnimateSidebar(true); // Expand column, animate content in
+                UpdateCanvas($"[Enter query to view {GetCanvasTitle()}.]", GetCanvasTitle());
+                AnimateSidebar(true);
                 systemMessage += " Canvas shown.";
             }
 
             AddMessageBubble(systemMessage, false, "System");
 
-            // Ensure RadioButtons reflect the current state
-            ChatOnlyModeButton.IsChecked = (_currentMode == AppMode.None);
-            DeepResearchModeButton.IsChecked = (_currentMode == AppMode.DeepResearch);
-            ParalegalModeButton.IsChecked = (_currentMode == AppMode.Paralegal);
-            CrossExamineModeButton.IsChecked = (_currentMode == AppMode.CrossExamine);
+            ChatOnlyModeButton.IsChecked = (_currentMode == Counsel.Models.AppMode.None);
+            DeepResearchModeButton.IsChecked = (_currentMode == Counsel.Models.AppMode.DeepResearch);
+            ParalegalModeButton.IsChecked = (_currentMode == Counsel.Models.AppMode.Paralegal);
+            CrossExamineModeButton.IsChecked = (_currentMode == Counsel.Models.AppMode.CrossExamine);
         }
 
-        /// <summary>
-        /// Animates the Right Sidebar CONTENT width/opacity and sets the COLUMN width.
-        /// </summary>
-        /// <param name="show">True to show the sidebar, false to hide it.</param>
         private void AnimateSidebar(bool show)
         {
             if (_sidebarStoryboard == null || RightSidebar == null || CanvasColumn == null) return;
 
-            _sidebarStoryboard.Stop(RightSidebar); // Stop previous animation on the content
+            _sidebarStoryboard.Stop(RightSidebar);
             _sidebarStoryboard.Children.Clear();
-            // Clean up previous handler rigorously
             _sidebarStoryboard.Completed -= SidebarStoryboard_Completed_Hide;
 
             Duration duration = new Duration(TimeSpan.FromSeconds(0.3));
             var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-            // Create Width Animation (for RightSidebar CONTENT)
             DoubleAnimation widthAnimation = new DoubleAnimation
             {
                 Duration = duration,
@@ -396,7 +364,6 @@ namespace Counsel
             Storyboard.SetTarget(widthAnimation, RightSidebar);
             Storyboard.SetTargetProperty(widthAnimation, new PropertyPath(FrameworkElement.WidthProperty));
 
-            // Create Opacity Animation (for RightSidebar CONTENT)
             DoubleAnimation opacityAnimation = new DoubleAnimation
             {
                 Duration = duration,
@@ -407,101 +374,77 @@ namespace Counsel
 
             if (show)
             {
-                // --- SHOW ---
-                // **MODIFIED**: Set COLUMN width immediately to allow expansion
                 CanvasColumn.Width = _canvasTargetGridWidth;
-                // Make CONTENT visible before animating in
                 RightSidebar.Visibility = Visibility.Visible;
 
-                // Animate CONTENT width from 0 to target
-                widthAnimation.From = 0; // Start from 0 as it was collapsed
+                widthAnimation.From = 0;
                 widthAnimation.To = _canvasTargetWidth;
 
-                // Animate CONTENT opacity from 0 to 1
                 opacityAnimation.From = 0.0;
                 opacityAnimation.To = 1.0;
             }
             else
             {
-                // --- HIDE ---
-                // Animate CONTENT width from current to 0
                 widthAnimation.From = RightSidebar.ActualWidth;
                 widthAnimation.To = 0;
 
-                // Animate CONTENT opacity from current to 0
                 opacityAnimation.From = RightSidebar.Opacity;
                 opacityAnimation.To = 0.0;
 
-                // **MODIFIED**: Attach completed handler to collapse COLUMN *after* animation
                 _sidebarStoryboard.Completed += SidebarStoryboard_Completed_Hide;
             }
 
             _sidebarStoryboard.Children.Add(widthAnimation);
             _sidebarStoryboard.Children.Add(opacityAnimation);
-            _sidebarStoryboard.Begin(RightSidebar, true); // Animate the RightSidebar content
+            _sidebarStoryboard.Begin(RightSidebar, true);
         }
 
-        /// <summary>
-        /// Event handler for the completion of the sidebar hide animation.
-        /// Sets content visibility to Collapsed and collapses the COLUMN.
-        /// </summary>
         private void SidebarStoryboard_Completed_Hide(object sender, EventArgs e)
         {
-            // Ensure elements are still valid
             if (RightSidebar == null || CanvasColumn == null) return;
 
-            // Only collapse if we are still in the 'None' mode
-            if (_currentMode == AppMode.None)
+            if (_currentMode == Counsel.Models.AppMode.None)
             {
-                // **MODIFIED**: Collapse the COLUMN width
                 CanvasColumn.Width = new GridLength(0);
-                // Collapse the CONTENT visibility
                 RightSidebar.Visibility = Visibility.Collapsed;
             }
 
-            // Clean up the event handler
             if (_sidebarStoryboard != null)
             {
                 _sidebarStoryboard.Completed -= SidebarStoryboard_Completed_Hide;
             }
         }
 
-
-        private void UpdateInputPlaceholderForMode(AppMode mode)
+        private void UpdateInputPlaceholderForMode(Counsel.Models.AppMode mode)
         {
             if (InputPlaceholder == null) return;
             switch (mode)
             {
-                case AppMode.DeepResearch: InputPlaceholder.Text = "Ask a legal research question..."; break;
-                case AppMode.Paralegal: InputPlaceholder.Text = "Request document summaries or evidence extracts..."; break;
-                case AppMode.CrossExamine: InputPlaceholder.Text = "Submit testimony notes for insights..."; break;
-                case AppMode.None: default: InputPlaceholder.Text = "Ask Counsel..."; break;
+                case Counsel.Models.AppMode.DeepResearch: InputPlaceholder.Text = "Ask a legal research question..."; break;
+                case Counsel.Models.AppMode.Paralegal: InputPlaceholder.Text = "Request document summaries or evidence extracts..."; break;
+                case Counsel.Models.AppMode.CrossExamine: InputPlaceholder.Text = "Submit testimony notes for insights..."; break;
+                case Counsel.Models.AppMode.None: default: InputPlaceholder.Text = "Ask Counsel..."; break;
             }
             UpdatePlaceholderVisibility();
         }
 
-        private string GetModeFriendlyName(AppMode mode)
+        private string GetModeFriendlyName(Counsel.Models.AppMode mode)
         {
             switch (mode)
             {
-                case AppMode.DeepResearch: return "Deep Research";
-                case AppMode.Paralegal: return "Paralegal";
-                case AppMode.CrossExamine: return "Cross Examine";
-                case AppMode.None: default: return "Chat Only";
+                case Counsel.Models.AppMode.DeepResearch: return "Deep Research";
+                case Counsel.Models.AppMode.Paralegal: return "Paralegal";
+                case Counsel.Models.AppMode.CrossExamine: return "Cross Examine";
+                case Counsel.Models.AppMode.None: default: return "Chat Only";
             }
         }
 
-        // --- Canvas Update ---
-        // (No changes in this section)
         private void UpdateCanvas(string content, string title)
         {
             if (!_isLoaded || RightSidebarTitle == null || RightSidebarContent == null) return;
             RightSidebarTitle.Text = title;
             RightSidebarContent.Text = content;
         }
-
-        // --- Other Event Handlers ---
-        // (No changes in this section unless specified)
 
         private void CaseSelectorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -533,43 +476,16 @@ namespace Counsel
             if (!isSpecialAction)
             {
                 UpdateContextDisplay();
-                if (_currentMode != AppMode.None)
+                if (_currentMode != Counsel.Models.AppMode.None)
                 {
                     UpdateCanvas($"[Case switched to {selectedCase}. Enter query for {GetCanvasTitle()}.]", GetCanvasTitle());
                 }
             }
         }
 
-        private void DocumentComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (!_isLoaded || ContextFocusText == null || DocumentComboBox == null) return;
-
-            bool documentSelected = false;
-            string selectedDocument = "[No Document Selected]";
-
-            if (DocumentComboBox.SelectedItem is ComboBoxItem selectedItem && DocumentComboBox.SelectedIndex > 0)
-            {
-                selectedDocument = selectedItem.Content.ToString();
-                documentSelected = true;
-                AddMessageBubble($"[System] Focused on document: {selectedDocument}", false, "System");
-                if (_currentMode != AppMode.None)
-                {
-                    string canvasTitle = $"Document Summary: {Shorten(selectedDocument, 30)}";
-                    UpdateCanvas($"Summary for {selectedDocument}:\n\n[Placeholder document summary...]", canvasTitle);
-                }
-            }
-
-            UpdateContextDisplay();
-
-            if (!documentSelected && _currentMode != AppMode.None)
-            {
-                UpdateCanvas($"[Select a document or enter query for {GetCanvasTitle()}.]", GetCanvasTitle());
-            }
-        }
-
         private void UpdateContextDisplay()
         {
-            if (!_isLoaded || ContextCaseText == null || ContextModeText == null || ContextFocusText == null) return;
+            if (!_isLoaded || ContextCaseText == null || ContextModeText == null) return;
 
             string caseText = "[No Case Selected]";
             if (CaseSelectorComboBox.SelectedItem is ComboBoxItem selectedCaseItem)
@@ -582,20 +498,8 @@ namespace Counsel
             }
             ContextCaseText.Text = $"Case: {caseText}";
             ContextModeText.Text = $"Mode: {GetModeFriendlyName(_currentMode)}";
-
-            if (DocumentComboBox.SelectedItem is ComboBoxItem selectedDocItem && DocumentComboBox.SelectedIndex > 0)
-            {
-                ContextFocusText.Text = $"Focus: {selectedDocItem.Content}";
-                ContextFocusText.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                ContextFocusText.Visibility = Visibility.Collapsed;
-            }
         }
 
-        // --- UI Interaction Helpers (Copy Button, etc.) ---
-        // (No changes in this section)
         private void AgentBubble_MouseEnter(object sender, MouseEventArgs e)
         {
             if (sender is Border bubble && bubble.Child is StackPanel stackPanel)
@@ -640,14 +544,68 @@ namespace Counsel
                 }
             }
         }
+        private void CopyButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(RightSidebarContent.Text))
+                {
+                    Clipboard.SetText(RightSidebarContent.Text);
+                    AddMessageBubble("[System] Canvas content copied to clipboard.", false, "System");
+                }
+                else
+                {
+                    MessageBox.Show("No content to copy.", "Clipboard", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error copying text: {ex.Message}", "Clipboard Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
 
-        // --- Placeholder actions for other buttons ---
-        // (No changes in this section)
-        private void UploadDocument_Click(object sender, RoutedEventArgs e)
+
+
+
+        private async void UploadDocument_Click(object sender, RoutedEventArgs e)
         {
             if (!_isLoaded) return;
-            AddMessageBubble("[System] Upload document action triggered.", false, "System");
-            MessageBox.Show("Placeholder: Open file dialog to upload document.", "Upload Document", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            // Open file dialog to select a PDF
+            OpenFileDialog openFileDialog = new OpenFileDialog
+            {
+                Filter = "PDF Files (*.pdf)|*.pdf",
+                Title = "Select a PDF Document to Upload"
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                string filePath = openFileDialog.FileName;
+                string fileName = Path.GetFileName(filePath);
+
+                AddMessageBubble($"[System] Uploading document: {fileName}", false, "System");
+
+                try
+                {
+                    // Read file content
+                    byte[] fileBytes = File.ReadAllBytes(filePath);
+                    using var content = new MultipartFormDataContent();
+                    var fileContent = new ByteArrayContent(fileBytes);
+                    fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+                    content.Add(fileContent, "file", fileName);
+
+                    // Send to backend
+                    var response = await _httpClient.PostAsync("/api/documents/upload", content);
+                    response.EnsureSuccessStatusCode();
+                    var responseMessage = await response.Content.ReadAsStringAsync();
+
+                    AddMessageBubble($"[System] Document uploaded successfully: {responseMessage}", false, "System");
+                }
+                catch (Exception ex)
+                {
+                    AddMessageBubble($"[System] Error uploading document: {ex.Message}", false, "System");
+                }
+            }
         }
 
         private void AttachButton_Click(object sender, RoutedEventArgs e)
@@ -657,26 +615,115 @@ namespace Counsel
             MessageBox.Show("Placeholder: Open file dialog to attach file to message.", "Attach File", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        // --- Task Popup Event Handlers ---
-        // (No changes in this section)
         private void AddTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!_isLoaded || TaskPopup == null || TaskInputTextBox == null) return;
-            TaskInputTextBox.Clear();
+            if (!_isLoaded || TaskPopup == null || EventTitleTextBox == null) return;
+            EventTitleTextBox.Clear();
+            EventDateTextBox.Clear();
+            EventTimeTextBox.Clear();
+            EventDescriptionTextBox.Clear();
             TaskPopup.IsOpen = true;
-            TaskInputTextBox.Focus();
+            EventTitleTextBox.Focus();
         }
 
-        private void ConfirmTaskButton_Click(object sender, RoutedEventArgs e)
+        private async void ConfirmTaskButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!_isLoaded || TaskPopup == null || TaskInputTextBox == null || TaskComboBox == null) return;
-            if (!string.IsNullOrWhiteSpace(TaskInputTextBox.Text))
+            if (!_isLoaded || TaskPopup == null || EventTitleTextBox == null || TaskComboBox == null) return;
+
+            string title = EventTitleTextBox.Text.Trim();
+            string date = EventDateTextBox.Text.Trim();
+            string time = EventTimeTextBox.Text.Trim();
+            string description = EventDescriptionTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description))
             {
-                string task = TaskInputTextBox.Text.Trim();
-                TaskComboBox.Items.Insert(0, new ComboBoxItem { Content = $"[New Task] {task}" });
-                TaskComboBox.SelectedIndex = 0;
-                AddMessageBubble($"[System] Reminder added: {task}", false, "System");
+                MessageBox.Show("Please provide at least a title or description.", "Invalid Input", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
+
+            // Construct natural language query
+            string query = $"{title} on {date} at {time}. {description}".Trim();
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                query = description; // Fallback to description if other fields are empty
+            }
+
+            try
+            {
+                // Log the query for debugging
+                Console.WriteLine($"Sending calendar query: {query}");
+
+                // Send query to backend
+                var request = new { Query = query };
+                var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync("/api/calendar/generate", content);
+
+                // Log the status code
+                Console.WriteLine($"HTTP Status: {response.StatusCode}");
+
+                // Read response content
+                var responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Calendar API response: {responseContent}");
+
+                // Check status code
+                if (!response.IsSuccessStatusCode)
+                {
+                    MessageBox.Show($"Server error: {response.StatusCode} - {responseContent}", "Server Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // Deserialize response
+                var calendarResponse = JsonSerializer.Deserialize<CalendarEventResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true // Handle case differences
+                });
+
+                if (calendarResponse == null || string.IsNullOrEmpty(calendarResponse.IcsContent) || string.IsNullOrEmpty(calendarResponse.FileName))
+                {
+                    MessageBox.Show($"Invalid response from server: {responseContent}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                // Save ICS file
+                var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    FileName = calendarResponse.FileName,
+                    Filter = "ICS Files (*.ics)|*.ics"
+                };
+                if (saveFileDialog.ShowDialog() == true)
+                {
+                    await File.WriteAllTextAsync(saveFileDialog.FileName, calendarResponse.IcsContent);
+                    MessageBox.Show("Calendar event saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    // Update UI only if file is saved
+                    string eventTitle = calendarResponse.EventDetails?.Title ?? title;
+                    TaskComboBox.Items.Insert(0, new ComboBoxItem { Content = $"[Scheduled] {eventTitle}" });
+                    TaskComboBox.SelectedIndex = 0;
+                    AddMessageBubble($"[System] Calendar event added: {eventTitle}", false, "System");
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                // Log the full exception
+                Console.WriteLine($"HTTP error: {ex.Message}, Status: {ex.StatusCode}");
+                string errorMessage = ex.StatusCode == System.Net.HttpStatusCode.BadRequest
+                    ? "Bad request error. Please check your input data."
+                    : ex.Message;
+                MessageBox.Show($"Failed to create event: {errorMessage}", "HTTP Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (JsonException ex)
+            {
+                // Log the JSON error
+                Console.WriteLine($"JSON error: {ex.Message}");
+                MessageBox.Show($"Error parsing server response: {ex.Message}", "JSON Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (Exception ex)
+            {
+                // Log the general error
+                Console.WriteLine($"General error: {ex.Message}");
+                MessageBox.Show($"Error creating calendar event: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+
             TaskPopup.IsOpen = false;
         }
 
@@ -684,6 +731,21 @@ namespace Counsel
         {
             if (!_isLoaded || TaskPopup == null) return;
             TaskPopup.IsOpen = false;
+        }
+
+        private class CalendarEventResponse
+        {
+            public string IcsContent { get; set; }
+            public string FileName { get; set; }
+            public EventDetailsResponse EventDetails { get; set; }
+        }
+
+        private class EventDetailsResponse
+        {
+            public string Title { get; set; }
+            public DateTime StartDateTime { get; set; }
+            public DateTime EndDateTime { get; set; }
+            public string Description { get; set; }
         }
     }
 }

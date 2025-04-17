@@ -66,13 +66,13 @@ namespace Counsel.BackendApi.Plugins
 
             try
             {
-                var notesJson = await GenerateStructuredNotesAsync(query);
-                _logger.LogInformation("Generated structured notes: {Notes}", notesJson.Substring(0, Math.Min(50, notesJson.Length)));
+                var structuredNotes = await GenerateStructuredNotesAsync(query);
+                _logger.LogInformation("Generated structured notes: {Notes}", structuredNotes.Substring(0, Math.Min(50, structuredNotes.Length)));
 
                 var webResults = await WebSearchAsync(query);
                 var formattedWebContent = FormatWebResultsForLLM(webResults);
 
-                var researchBrief = await GenerateResearchBriefAsync(query, notesJson, formattedWebContent);
+                var researchBrief = await GenerateResearchBriefAsync(query, structuredNotes, formattedWebContent);
 
                 _logger.LogInformation("Completed optimized legal research for query: {Query}", query);
                 return researchBrief;
@@ -80,7 +80,7 @@ namespace Counsel.BackendApi.Plugins
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error performing legal research for query: {Query}", ex.Message);
-                return $"<div class='error'>An error occurred: {ex.Message}. Please refine your query or check document availability.</div>";
+                return $"ERROR: An error occurred: {ex.Message}. Please refine your query or check document availability.";
             }
         }
 
@@ -92,27 +92,52 @@ namespace Counsel.BackendApi.Plugins
             if (!documentChunks.Any())
             {
                 _logger.LogWarning("No relevant documents found for notes generation");
-                return "{}";
+                return "No relevant documents found.";
             }
 
             var contents = documentChunks.Select(d => d.Content).Where(c => !string.IsNullOrEmpty(c)).ToArray();
             if (contents.Length == 0)
             {
                 _logger.LogWarning("No valid content found in document chunks");
-                return "{}";
+                return "No valid content found in documents.";
             }
 
-            // Optimized prompt for detailed notes, capturing legal specifics
-            var promptTemplate = @"Based on the query '{{query}}' and the provided document excerpts, generate structured notes for a legal professional in JSON format:
-{
-  ""timeline"": [],
-  ""keyPoints"": [],
-  ""questions"": []
-}
-- timeline: Chronological events with legal significance (e.g., {""date"": ""2024-01-01"", ""event"": ""Contract signed"", ""significance"": ""Establishes obligations""}).
-- keyPoints: Specific contract clauses, case law, or facts, with sources (e.g., {""point"": ""Breach notice sent"", ""source"": ""Memo"", ""quote"": ""..."", ""implication"": ""...""}).
-- questions: Precise gaps (e.g., ""Was notice sent within contract deadline?"").
-Excerpts:
+            // Optimized prompt for detailed notes in plain text format
+            var promptTemplate = @"Based on the query '{{query}}' and the provided document excerpts, generate structured legal notes in professional format:
+
+INSTRUCTIONS:
+1. Create a well-formatted document with clear sections and proper indentation
+2. Include only sections that are relevant to the content in the documents
+3. Format as PLAIN TEXT with proper spacing (NO markdown, HTML, or JSON)
+4. Use CAPITALIZED HEADERS for structure and indentation for readability
+5. Use bullet points (•) where appropriate
+6. Include the following sections ONLY IF RELEVANT:
+   - DOCUMENT TIMELINE: Chronological events with legal significance
+   - KEY LEGAL POINTS: Specific clauses, case law references, or facts with source documents
+   - LEGAL QUESTIONS: Issues requiring clarification or follow-up
+   
+Example format:
+--------------------
+LEGAL RESEARCH NOTES
+RE: [Brief subject based on query]
+
+DOCUMENT TIMELINE
+• January 15, 2024 - Contract signed establishing obligations between parties
+• March 1, 2024 - First notice of payment delay sent to counterparty
+• March 30, 2024 - Formal breach notice delivered per Section 8.2
+
+KEY LEGAL POINTS
+• Material Breach Definition: Contract Section 6.1 defines material breach as ""any failure to perform that remains uncured for more than 30 days""
+• Payment Schedule: Exhibit A requires payments within 15 days of invoice
+• Force Majeure: Section 9.3 excludes ""financial hardship"" from force majeure events
+
+LEGAL QUESTIONS
+• Was formal notice properly delivered according to contract requirements?
+• Does the 30-day cure period apply to payment obligations?
+• Are there precedent cases regarding similar payment delay scenarios?
+--------------------
+
+Document excerpts to analyze:
 {{chunks}}";
 
             var renderedPrompt = promptTemplate
@@ -120,18 +145,9 @@ Excerpts:
                 .Replace("{{chunks}}", string.Join("\n", contents));
 
             var result = await _kernel.InvokePromptAsync(renderedPrompt, new KernelArguments());
-            var json = result.GetValue<string>() ?? "{}";
-            try
-            {
-                JsonSerializer.Deserialize<object>(json);
-                _logger.LogInformation("Structured notes generated successfully");
-                return json;
-            }
-            catch
-            {
-                _logger.LogWarning("Invalid JSON from notes generation, returning empty object");
-                return "{}";
-            }
+            var notes = result.GetValue<string>() ?? "Error generating notes.";
+            _logger.LogInformation("Structured notes generated successfully");
+            return notes;
         }
 
         private async Task<List<DocumentChunk>> TryLoadRelevantDocumentsAsync(string query)
@@ -319,89 +335,64 @@ Excerpts:
             return results.Take(MAX_WEB_RESULTS).ToList();
         }
 
-        private async Task<string> GenerateResearchBriefAsync(string query, string notesJson, string webContent)
+        private async Task<string> GenerateResearchBriefAsync(string query, string structuredNotes, string webContent)
         {
             _logger.LogInformation("Generating optimized research brief for query: {Query}", query);
 
             try
             {
-                // Enhanced prompt for hackathon: detailed, actionable, and legally focused
-                var promptTemplate = @"# LEGAL RESEARCH BRIEF
+                // Enhanced prompt for professional legal brief format with plain text
+                var promptTemplate = @"LEGAL RESEARCH BRIEF INSTRUCTIONS
 
-## QUERY
-""{{query}}"" 
+QUERY: ""{{query}}""
 
-## INSTRUCTIONS
-You are an expert legal research assistant analyzing a contract dispute. Produce a professional research brief that:
-1. Summarizes key findings (2-3 paragraphs), focusing on breach, remedies, or defenses.
-2. Answers the query with evidence from notes and web sources, citing specific clauses or cases.
-3. Integrates recent case law or statutes (2020-2025) for context.
-4. Cites sources:
-   - Documents: [Timeline X], [Key Point Y]
-   - Web: [Title, URL]
-5. Analyzes source alignment (e.g., do notes and web agree?).
-6. Identifies precise gaps (e.g., missing contract terms).
-7. Recommends actionable steps (e.g., verify notice timing).
+INSTRUCTIONS:
+You are an expert legal research assistant analyzing a contract dispute. Create a professional legal research brief that addresses the query. The brief should be formatted as PLAIN TEXT (not HTML, not Markdown) in a professional legal style with the following structure:
 
-## STRUCTURED NOTES
+FORMAT INSTRUCTIONS:
+1. Use CAPITALIZED HEADERS for main sections
+2. Use proper spacing and indentation for readability
+3. Use bullet points (•) where appropriate
+4. Format must be pure text that will be displayed exactly as written
+5. DO NOT include HTML, CSS, markdown symbols, or other formatting codes
+6. Include proper citations to document evidence and web sources
+7. Use clear paragraph breaks between sections
+
+REQUIRED SECTIONS:
+- MEMORANDUM heading with current date and query reference
+- EXECUTIVE SUMMARY: Concise overview of key findings (2-3 paragraphs)
+- ANALYSIS: In-depth response with evidence from sources
+- UNANSWERED QUESTIONS: Gaps requiring further investigation
+- RECOMMENDATIONS: Practical next steps
+- SOURCES: Properly cited document and web references
+
+Here's an example of the expected format:
+--------------------
+LEGAL RESEARCH MEMORANDUM
+Date: April 16, 2025
+RE: Contract Breach Due to Payment Delays
+
+EXECUTIVE SUMMARY
+This memorandum addresses the query regarding minor payment delays and their status as material breaches of contract. Based on our research of internal documents and relevant web sources, payment delays of less than 30 days generally do not constitute material breach when contracts contain standard cure provisions...
+
+[Additional sections follow with proper spacing]
+--------------------
+
+STRUCTURED NOTES FROM DOCUMENTS:
 {{notes}}
 
-## WEB RESULTS
+WEB RESEARCH RESULTS:
 {{web}}
 
-## OUTPUT FORMAT (HTML)
-<style>
-    .legal-brief { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f9f9f9; border-radius: 8px; }
-    .brief-header { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; }
-    .brief-header h1 { color: #2c3e50; margin: 0; }
-    .brief-header h2 { color: #34495e; margin: 5px 0; }
-    .date, .query { color: #7f8c8d; font-style: italic; }
-    h3 { color: #2c3e50; border-left: 4px solid #3498db; padding-left: 10px; }
-    .executive-summary, .analysis, .unanswered-questions, .recommendations, .sources { margin: 20px 0; }
-    p, li { line-height: 1.6; color: #34495e; }
-    ul, ol { padding-left: 20px; }
-    a { color: #3498db; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-</style>
-<div class=""legal-brief"">
-    <div class=""brief-header"">
-        <h1>Legal Research Brief</h1>
-        <h2>RE: [Query subject]</h2>
-        <p class=""date"">Date: [Current Date]</p>
-        <p class=""query"">Query: ""[Original query text]""</p>
-    </div>
-    <div class=""executive-summary"">
-        <h3>EXECUTIVE SUMMARY</h3>
-        [Clear overview of findings, grounded in evidence]
-    </div>
-    <div class=""analysis"">
-        <h3>ANALYSIS</h3>
-        [Detailed response with clause analysis, case law, and citations]
-    </div>
-    <div class=""unanswered-questions"">
-        <h3>UNANSWERED QUESTIONS</h3>
-        [Specific gaps, e.g., unclear payment terms]
-    </div>
-    <div class=""recommendations"">
-        <h3>RECOMMENDATIONS</h3>
-        [Practical steps, e.g., review contract]
-    </div>
-    <div class=""sources"">
-        <h3>SOURCES</h3>
-        <h4>Documents</h4>
-        [Document citations]
-        <h4>Web</h4>
-        [Web citations]
-    </div>
-</div>";
+Remember to analyze how document evidence and web sources align or conflict, and identify specific contract provisions, case law, or statutes that directly address the query.";
 
                 var renderedPrompt = promptTemplate
                     .Replace("{{query}}", query)
-                    .Replace("{{notes}}", notesJson)
+                    .Replace("{{notes}}", structuredNotes)
                     .Replace("{{web}}", webContent);
 
                 var result = await _kernel.InvokePromptAsync(renderedPrompt, new KernelArguments());
-                var brief = result.GetValue<string>() ?? "<div class='error'>Error generating research brief.</div>";
+                var brief = result.GetValue<string>() ?? "Error generating research brief.";
 
                 _logger.LogInformation("Research brief generated successfully");
                 return brief;
@@ -409,7 +400,7 @@ You are an expert legal research assistant analyzing a contract dispute. Produce
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating research brief: {ErrorMessage}", ex.Message);
-                return $"<div class='error'>Error generating research brief: {ex.Message}</div>";
+                return $"ERROR: Error generating research brief: {ex.Message}";
             }
         }
 
@@ -419,16 +410,17 @@ You are an expert legal research assistant analyzing a contract dispute. Produce
                 return "No web search results found.";
 
             var sb = new StringBuilder();
-            sb.AppendLine("## Web Search Results");
+            sb.AppendLine("WEB SEARCH RESULTS");
+            sb.AppendLine("------------------");
             foreach (var result in webResults)
             {
-                sb.AppendLine($"### {result.Title}");
+                sb.AppendLine($"TITLE: {result.Title}");
                 if (!string.IsNullOrEmpty(result.Source))
-                    sb.AppendLine($"**Source:** {result.Source}");
+                    sb.AppendLine($"SOURCE: {result.Source}");
                 if (result.PublishedDate.HasValue)
-                    sb.AppendLine($"**Published:** {result.PublishedDate.Value:MMMM d, yyyy}");
-                sb.AppendLine($"**URL:** {result.Url}");
-                sb.AppendLine($"{result.Description}");
+                    sb.AppendLine($"PUBLISHED: {result.PublishedDate.Value:MMMM d, yyyy}");
+                sb.AppendLine($"URL: {result.Url}");
+                sb.AppendLine($"DESCRIPTION: {result.Description}");
                 sb.AppendLine();
             }
             return sb.ToString();
